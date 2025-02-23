@@ -65,14 +65,15 @@ app.post("/webhook", async (req, res) => {
     const eventData = req.body;
 
     console.log(`[${new Date().toISOString()}] 🔹 Received Event: ${eventType}`);
+    console.log(`📜 Full Event Data:`, JSON.stringify(eventData, null, 2)); // Debugging log
 
-    // ✅ **Fix Webhook Verification Handling**
+    // ✅ Webhook Verification Handling
     if (eventType === "verification") {
         console.log("✅ Webhook Verified Successfully!");
-        return res.sendStatus(204); // Important: Respond immediately!
+        return res.sendStatus(204);
     }
 
-    // ✅ **Fix Event Type to Accept `user.chat`**
+    // ✅ Accept `user.chat` Events
     if (eventType !== "user.chat") {
         console.log(`ℹ️ Ignoring unrelated event type: ${eventType}`);
         return res.sendStatus(204);
@@ -80,6 +81,12 @@ app.post("/webhook", async (req, res) => {
 
     if (!validateSignature(req)) {
         return res.sendStatus(403);
+    }
+
+    // ✅ **Safeguard Against Undefined Player Data**
+    if (!eventData || !eventData.message || !eventData.player || !eventData.player.name) {
+        console.log("⚠️ Missing player data in event, skipping.");
+        return res.sendStatus(204);
     }
 
     // ✅ Process Game Chat Messages
