@@ -76,7 +76,7 @@ async function registerWebhook(url) {
         console.log(`🔍 Attempting to register Hephaistos webhook for SERVER_API_ID: ${SERVER_API_ID}`);
         console.log(`🔗 Webhook URL: ${url}`);
 
-        const response = await axios.post(`${API_BASE_URL}/hephaistos/${SERVER_API_ID}/webhook`, { 
+        const response = await axios.post(`${API_BASE_URL}/server/${SERVER_API_ID}/hephaistos/webhook`, { 
             url,
             secret: WEBHOOK_SECRET,
             events: ["chat_message"] // Listens to in-game chat messages
