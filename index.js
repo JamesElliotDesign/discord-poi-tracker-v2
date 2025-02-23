@@ -2,12 +2,11 @@ const express = require('express');
 const crypto = require('crypto'); // ✅ Required for signature verification
 const fs = require('fs');
 const stringSimilarity = require('string-similarity');
-const { getServerInfo, sendServerMessage, registerWebhook } = require('./services/cftoolsService');
+const { getServerInfo, sendServerMessage } = require('./services/cftoolsService');
 require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const WEBHOOK_URL = process.env.CFTOOLS_WEBHOOK_URL;
 const WEBHOOK_SECRET = process.env.CFTOOLS_WEBHOOK_SECRET; // ✅ New Secret for verification
 
 app.use(express.json({ verify: (req, res, buf) => { req.rawBody = buf; }})); // ✅ Store raw request body for verification
@@ -32,17 +31,29 @@ const CLAIMS = {};
 
 // ✅ Function to verify webhook request signature
 const verifySignature = (req) => {
-    const signature = req.headers['x-cftools-signature']; // ✅ Get signature from headers
-    if (!signature || !WEBHOOK_SECRET) return false;
+    const receivedSignature = req.headers['x-hephaistos-signature']; // ✅ CORRECT HEADER
+    const deliveryId = req.headers['x-hephaistos-delivery']; // ✅ REQUIRED FOR SIGNING
 
-    const hmac = crypto.createHmac('sha256', WEBHOOK_SECRET);
-    hmac.update(req.rawBody);
-    const expectedSignature = hmac.digest('hex');
+    if (!receivedSignature || !WEBHOOK_SECRET || !deliveryId) {
+        console.error("❌ Missing required headers for signature verification.");
+        return false;
+    }
 
-    return signature === expectedSignature;
+    // Generate expected signature
+    const expectedSignature = crypto.createHash('sha256')
+        .update(deliveryId + WEBHOOK_SECRET)
+        .digest('hex');
+
+    if (expectedSignature !== receivedSignature) {
+        console.error(`❌ Webhook Signature Mismatch! Expected: ${expectedSignature}, Received: ${receivedSignature}`);
+        return false;
+    }
+
+    console.log("✅ Webhook Signature Verified!");
+    return true;
 };
 
-// ✅ Register webhook on startup
+// ✅ Initialize and Fetch Server Info on Startup
 (async () => {
     try {
         const serverInfo = await getServerInfo();
@@ -51,9 +62,7 @@ const verifySignature = (req) => {
         console.log("🔹 Server ID:", serverInfo.server.gameserver.gameserver_id);
         console.log("🔹 Connection Protocol:", serverInfo.server.connection.protcol_used);
         console.log("🔹 Worker State:", serverInfo.server.worker.state);
-
-        console.log("🔗 Registering CF Tools Webhook...");
-        await registerWebhook(WEBHOOK_URL);
+        console.log("✅ Webhook should already be manually registered in CFTools Cloud.");
     } catch (error) {
         console.error("❌ Error during API communication:", error.message);
     }
