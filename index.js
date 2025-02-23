@@ -72,8 +72,8 @@ app.post("/webhook", async (req, res) => {
         return res.sendStatus(204); // Important: Respond immediately!
     }
 
-    // ✅ **Fix Incorrect Event Type Handling**
-    if (eventType !== "gameserver.chat.message") {
+    // ✅ **Fix Event Type to Accept `user.chat`**
+    if (eventType !== "user.chat") {
         console.log(`ℹ️ Ignoring unrelated event type: ${eventType}`);
         return res.sendStatus(204);
     }
