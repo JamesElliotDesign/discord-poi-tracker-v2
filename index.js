@@ -14,6 +14,7 @@ app.use(express.json());
 const CLAIMS = {}; // Stores active POI claims
 const CLAIM_REGEX = /\bCLAIM\s+([A-Za-z0-9_ -]+)\b/i;
 const CHECK_CLAIMS_REGEX = /\bcheck claims\b/i; // Detects "check claims" command
+const CHECK_POI_REGEX = /\bcheck\s+([A-Za-z0-9_ -]+)\b/i; // Detects "check [POI]" command
 
 // 🛑 POIs that should NOT be listed in "Check Claims"
 const EXCLUDED_POIS = [
@@ -115,11 +116,37 @@ app.post("/webhook", async (req, res) => {
         if (availablePOIs.length === 0) {
             await sendServerMessage("All POIs are currently claimed.");
         } else {
-            // 🚀 Use abbreviated POI names for output
-            let formattedPOIs = availablePOIs.map(poi => POI_MAP[poi]);
+            let formattedPOIs = availablePOIs.map(poi => POI_MAP[poi]); // Use abbreviated names
             let availableList = formattedPOIs.join(", ");
 
             await sendServerMessage(`Available POIs: ${availableList}`);
+        }
+        return res.sendStatus(204);
+    }
+
+    // 🟢 Check if player is checking a specific POI
+    const checkMatch = messageContent.match(CHECK_POI_REGEX);
+    if (checkMatch) {
+        let detectedPOI = checkMatch[1].trim().toLowerCase();
+
+        // Find the closest match for the given POI
+        let bestMatch = stringSimilarity.findBestMatch(detectedPOI, POI_LIST_LOWER);
+        let correctedPOI = bestMatch.bestMatch.rating > 0.5 ? POI_LIST[bestMatch.bestMatchIndex] : null;
+
+        if (!correctedPOI || EXCLUDED_POIS.includes(correctedPOI)) {
+            console.log(`❌ Unknown POI Check: ${playerName} attempted to check '${detectedPOI}'`);
+            await sendServerMessage(`Unknown POI: ${detectedPOI}. Try 'check claims' to see available POIs.`);
+            return res.sendStatus(204);
+        }
+
+        if (CLAIMS[correctedPOI]) {
+            let timeSinceClaim = Math.floor((Date.now() - CLAIMS[correctedPOI].timestamp) / 60000);
+            let claimMessage = `${POI_MAP[correctedPOI]} is currently claimed by ${CLAIMS[correctedPOI].player} ${timeSinceClaim} minutes ago.`;
+            console.log(`🔍 POI Check: ${claimMessage}`);
+            await sendServerMessage(claimMessage);
+        } else {
+            console.log(`🔍 POI Check: ${POI_MAP[correctedPOI]} is available.`);
+            await sendServerMessage(`${POI_MAP[correctedPOI]} is available to claim!`);
         }
         return res.sendStatus(204);
     }
@@ -147,24 +174,10 @@ app.post("/webhook", async (req, res) => {
             return res.sendStatus(204);
         }
 
-        console.log(`[CLAIM DETECTED] Player: ${playerName} | POI: ${POI_MAP[correctedPOI]} (Originally: ${match[1].trim()})`);
-
-        if (CLAIMS[correctedPOI]) {
-            let timeSinceClaim = Math.floor((Date.now() - CLAIMS[correctedPOI].timestamp) / 60000);
-            let responseMessage = `${CLAIMS[correctedPOI].player} already claimed ${POI_MAP[correctedPOI]} ${timeSinceClaim} minutes ago.`;
-            console.log(`🚫 POI Already Claimed: ${responseMessage}`);
-            await sendServerMessage(responseMessage);
-        } else {
-            CLAIMS[correctedPOI] = { player: playerName, timestamp: Date.now() };
-            let claimMessage = `${playerName} claimed ${POI_MAP[correctedPOI]}.`;
-            console.log(`✅ Claim Accepted: ${claimMessage}`);
-            await sendServerMessage(claimMessage);
-
-            setTimeout(() => {
-                delete CLAIMS[correctedPOI];
-                console.log(`🕒 POI Reset: ${POI_MAP[correctedPOI]} is now available again.`);
-            }, 45 * 60 * 1000); // Reset after 45 minutes
-        }
+        CLAIMS[correctedPOI] = { player: playerName, timestamp: Date.now() };
+        let claimMessage = `${playerName} claimed ${POI_MAP[correctedPOI]}.`;
+        console.log(`✅ Claim Accepted: ${claimMessage}`);
+        await sendServerMessage(claimMessage);
     }
 
     res.sendStatus(204);
