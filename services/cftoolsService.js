@@ -73,20 +73,23 @@ async function registerWebhook(url) {
     try {
         if (!authToken || Date.now() >= tokenExpiration) await authenticate();
 
-        await axios.post(`${API_BASE_URL}/server/${SERVER_API_ID}/webhook`, {
+        console.log(`🔍 Attempting to register Hephaistos webhook for SERVER_API_ID: ${SERVER_API_ID}`);
+        console.log(`🔗 Webhook URL: ${url}`);
+
+        const response = await axios.post(`${API_BASE_URL}/hephaistos/${SERVER_API_ID}/webhook`, { 
             url,
             secret: WEBHOOK_SECRET,
-            events: ["chat_message"] // Listens to chat messages
+            events: ["chat_message"] // Listens to in-game chat messages
         }, {
             headers: {
                 "Authorization": `Bearer ${authToken}`,
-                "User-Agent": APPLICATION_ID // ✅ FIXED HERE
+                "User-Agent": APPLICATION_ID
             }
         });
 
-        console.log(`✅ Webhook registered successfully at: ${url}`);
+        console.log(`✅ Hephaistos Webhook registered successfully at: ${url}`, response.data);
     } catch (error) {
-        console.error("❌ Failed to register webhook:", error.response?.data || error.message);
+        console.error("❌ Failed to register Hephaistos webhook:", error.response?.data || error.message);
     }
 }
 
