@@ -1,4 +1,5 @@
 const express = require('express');
+const crypto = require('crypto'); // ✅ Required for signature verification
 const fs = require('fs');
 const stringSimilarity = require('string-similarity');
 const { getServerInfo, sendServerMessage, registerWebhook } = require('./services/cftoolsService');
@@ -7,8 +8,9 @@ require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 3000;
 const WEBHOOK_URL = process.env.CFTOOLS_WEBHOOK_URL;
+const WEBHOOK_SECRET = process.env.CFTOOLS_WEBHOOK_SECRET; // ✅ New Secret for verification
 
-app.use(express.json());
+app.use(express.json({ verify: (req, res, buf) => { req.rawBody = buf; }})); // ✅ Store raw request body for verification
 
 // Store webhook logs for debugging
 const LOG_FILE = 'webhook_logs.json';
@@ -19,7 +21,6 @@ const logWebhookData = (data) => {
 };
 
 const CLAIM_REGEX = /\bCLAIM\s+([A-Za-z0-9_ -]+)\b/i;
-
 const POI_LIST = [
     "Sinystok Bunker T5", "Yephbin Underground Facility T4", "Rostoki Castle T5", "Svetloyarsk Oil Rig T4", 
     "Elektro Radier Outpost T1", "Tracksuit Tower T1", "Otmel Raider Outpost T1", "Svetloyarsk Raider Outpost T1", 
@@ -28,6 +29,18 @@ const POI_LIST = [
 ];
 
 const CLAIMS = {};
+
+// ✅ Function to verify webhook request signature
+const verifySignature = (req) => {
+    const signature = req.headers['x-cftools-signature']; // ✅ Get signature from headers
+    if (!signature || !WEBHOOK_SECRET) return false;
+
+    const hmac = crypto.createHmac('sha256', WEBHOOK_SECRET);
+    hmac.update(req.rawBody);
+    const expectedSignature = hmac.digest('hex');
+
+    return signature === expectedSignature;
+};
 
 // ✅ Register webhook on startup
 (async () => {
@@ -49,26 +62,31 @@ const CLAIMS = {};
 // ✅ Webhook Route to receive CF Tools Chat Data
 app.post('/webhook', async (req, res) => {
     try {
+        if (!verifySignature(req)) {
+            console.error("❌ Webhook signature verification failed!");
+            return res.status(403).send('Forbidden');
+        }
+
         const data = req.body;
         logWebhookData(data);
-        
+
         if (!data || !data.message || !data.username) {
             return res.status(400).send('Invalid Data');
         }
 
         const playerName = data.username;
         const messageContent = data.message;
-        
+
         console.log(`[Game Chat] ${playerName}: ${messageContent}`);
-        
+
         const match = messageContent.match(CLAIM_REGEX);
         if (match) {
             let detectedPOI = match[1].trim().toLowerCase();
-            
+
             // Find the closest match in POI list
             let bestMatch = stringSimilarity.findBestMatch(detectedPOI, POI_LIST);
             let correctedPOI = bestMatch.bestMatch.rating > 0.5 ? POI_LIST[bestMatch.bestMatchIndex] : null;
-            
+
             if (correctedPOI) {
                 if (CLAIMS[correctedPOI]) {
                     const timeElapsed = Math.floor((Date.now() - CLAIMS[correctedPOI].timestamp) / 60000);

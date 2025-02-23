@@ -5,11 +5,13 @@ const API_BASE_URL = "https://data.cftools.cloud/v1";
 const APPLICATION_ID = process.env.CFTOOLS_APPLICATION_ID;
 const APPLICATION_SECRET = process.env.CFTOOLS_APPLICATION_SECRET;
 const SERVER_API_ID = process.env.CFTOOLS_SERVER_API_ID; // Found in CFTools Dashboard
+const WEBHOOK_URL = process.env.CFTOOLS_WEBHOOK_URL;
+const WEBHOOK_SECRET = process.env.CFTOOLS_WEBHOOK_SECRET;
 
 let authToken = null;
 let tokenExpiration = 0;
 
-// Function to Authenticate & Get Token
+// ✅ Authenticate & Get Token
 async function authenticate() {
     try {
         const response = await axios.post(`${API_BASE_URL}/auth/register`, {
@@ -29,7 +31,7 @@ async function authenticate() {
     }
 }
 
-// Function to Get Server Info
+// ✅ Get Server Info
 async function getServerInfo() {
     try {
         if (!authToken || Date.now() >= tokenExpiration) await authenticate();
@@ -41,8 +43,6 @@ async function getServerInfo() {
             }
         });
 
-        console.log("🔹 Full API Response:", response.data); // Log full response
-
         return response.data;
     } catch (error) {
         console.error("❌ Failed to fetch server info:", error.response?.data || error.message);
@@ -50,14 +50,12 @@ async function getServerInfo() {
     }
 }
 
-// Function to Send a Message to In-Game Chat
+// ✅ Send a Message to In-Game Chat
 async function sendServerMessage(content) {
     try {
         if (!authToken || Date.now() >= tokenExpiration) await authenticate();
 
-        await axios.post(`${API_BASE_URL}/server/${SERVER_API_ID}/message-server`, {
-            content
-        }, {
+        await axios.post(`${API_BASE_URL}/server/${SERVER_API_ID}/message-server`, { content }, {
             headers: {
                 "Authorization": `Bearer ${authToken}`,
                 "User-Agent": APPLICATION_ID
@@ -70,4 +68,27 @@ async function sendServerMessage(content) {
     }
 }
 
-module.exports = { getServerInfo, sendServerMessage };
+// ✅ Register Webhook with CF Tools
+async function registerWebhook(url) {
+    try {
+        if (!authToken || Date.now() >= tokenExpiration) await authenticate();
+
+        await axios.post(`${API_BASE_URL}/server/${SERVER_API_ID}/webhook`, {
+            url,
+            secret: WEBHOOK_SECRET,
+            events: ["chat_message"] // Listens to chat messages
+        }, {
+            headers: {
+                "Authorization": `Bearer ${authToken}`,
+                "User-Agent": APPLICATION_ID // ✅ FIXED HERE
+            }
+        });
+
+        console.log(`✅ Webhook registered successfully at: ${url}`);
+    } catch (error) {
+        console.error("❌ Failed to register webhook:", error.response?.data || error.message);
+    }
+}
+
+// ✅ Export Functions
+module.exports = { getServerInfo, sendServerMessage, registerWebhook };
