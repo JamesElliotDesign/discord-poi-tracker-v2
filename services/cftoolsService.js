@@ -68,8 +68,7 @@ async function sendServerMessage(content) {
     }
 }
 
-// ✅ Register Webhook with CF Tools
-// ✅ Register Webhook with CFTools Hephaistos API
+// ✅ Register Webhook with CF Tools Hephaistos API
 async function registerWebhook(url) {
     try {
         if (!authToken || Date.now() >= tokenExpiration) await authenticate();
@@ -77,7 +76,7 @@ async function registerWebhook(url) {
         const response = await axios.post(`${API_BASE_URL}/server/${SERVER_API_ID}/hephaistos/webhook`, {
             url,
             secret: WEBHOOK_SECRET,
-            events: ["chat_message"] // ✅ Make sure this event type is supported
+            events: ["chat_message"] // ✅ Ensure event type is supported
         }, {
             headers: {
                 "Authorization": `Bearer ${authToken}`,
@@ -85,10 +84,18 @@ async function registerWebhook(url) {
             }
         });
 
-        console.log(`✅ Hephaistos Webhook registered successfully at: ${url}`);
-        console.log("🔹 Webhook Events: chat_message");
+        if (response.data && response.data.status) {
+            console.log(`✅ Hephaistos Webhook registered successfully at: ${url}`);
+            console.log("🔹 Webhook Events: chat_message");
+        } else {
+            console.log("⚠️ Webhook might already exist or needs manual validation in CFTools Cloud.");
+        }
     } catch (error) {
-        console.error("❌ Failed to register Hephaistos webhook:", error.response?.data || error.message);
+        if (error.response?.data?.error === 'route-not-found') {
+            console.error("❌ Hephaistos Webhook route not found. Ensure the API key has the correct permissions.");
+        } else {
+            console.error("❌ Failed to register Hephaistos webhook:", error.response?.data || error.message);
+        }
     }
 }
 
