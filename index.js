@@ -23,7 +23,7 @@ const EXCLUDED_POIS = [
     "Airdrop (Active Now)"
 ];
 
-// 🟢 POI LIST with Abbreviations for "Check Claims"
+// 🟢 POI LIST with Abbreviations
 const POI_MAP = {
     "Sinystok Bunker T5": "Sinystok Bunker",
     "Yephbin Underground Facility T4": "Yephbin",
@@ -44,18 +44,20 @@ const POI_MAP = {
     ...EXCLUDED_POIS.reduce((acc, poi) => ({ ...acc, [poi]: poi }), {}) // Ensure excluded POIs exist in mapping
 };
 
-// 🟢 Reverse POI Lookup (for claim detection)
-const POI_LIST = Object.keys(POI_MAP);
+// 🔄 **Reverse Lookup Map** (Abbreviated → Full POI Name)
+const ABBREVIATED_TO_FULL_POI = Object.fromEntries(
+    Object.entries(POI_MAP).map(([full, short]) => [short.toLowerCase(), full])
+);
 
 // 🟢 Dictionary for First Word Matching
 const FIRST_WORDS_MAP = {};
-POI_LIST.forEach(poi => {
+Object.keys(POI_MAP).forEach(poi => {
     const firstWord = poi.split(" ")[0].toLowerCase();
     FIRST_WORDS_MAP[firstWord] = poi;
 });
 
 // Lowercase POI list for similarity matching
-const POI_LIST_LOWER = POI_LIST.map(poi => poi.toLowerCase());
+const POI_LIST_LOWER = Object.keys(POI_MAP).map(poi => poi.toLowerCase());
 
 /**
  * Validate webhook signature
@@ -111,7 +113,7 @@ app.post("/webhook", async (req, res) => {
 
     // 🟢 Check if player typed "check claims"
     if (CHECK_CLAIMS_REGEX.test(messageContent)) {
-        let availablePOIs = POI_LIST.filter(poi => !CLAIMS[poi] && !EXCLUDED_POIS.includes(poi)); // Only show unclaimed POIs
+        let availablePOIs = Object.keys(POI_MAP).filter(poi => !CLAIMS[poi] && !EXCLUDED_POIS.includes(poi)); // Only show unclaimed POIs
 
         if (availablePOIs.length === 0) {
             await sendServerMessage("All POIs are currently claimed.");
@@ -129,9 +131,14 @@ app.post("/webhook", async (req, res) => {
     if (checkMatch) {
         let detectedPOI = checkMatch[1].trim().toLowerCase();
 
-        // Find the closest match for the given POI
-        let bestMatch = stringSimilarity.findBestMatch(detectedPOI, POI_LIST_LOWER);
-        let correctedPOI = bestMatch.bestMatch.rating > 0.5 ? POI_LIST[bestMatch.bestMatchIndex] : null;
+        // ✅ 1️⃣ First, check against **abbreviated names**
+        let correctedPOI = ABBREVIATED_TO_FULL_POI[detectedPOI];
+
+        // ✅ 2️⃣ If not found, check using **string similarity**
+        if (!correctedPOI) {
+            let bestMatch = stringSimilarity.findBestMatch(detectedPOI, POI_LIST_LOWER);
+            correctedPOI = bestMatch.bestMatch.rating > 0.5 ? Object.keys(POI_MAP)[bestMatch.bestMatchIndex] : null;
+        }
 
         if (!correctedPOI || EXCLUDED_POIS.includes(correctedPOI)) {
             console.log(`❌ Unknown POI Check: ${playerName} attempted to check '${detectedPOI}'`);
@@ -161,13 +168,6 @@ app.post("/webhook", async (req, res) => {
         let correctedPOI = bestFirstWordMatch.bestMatch.rating > 0.5
             ? FIRST_WORDS_MAP[bestFirstWordMatch.bestMatch.target]
             : detectedPOI;
-
-        if (bestFirstWordMatch.bestMatch.rating < 0.5) {
-            let bestMatch = stringSimilarity.findBestMatch(detectedPOI, POI_LIST_LOWER);
-            if (bestMatch.bestMatch.rating > 0.5) {
-                correctedPOI = POI_LIST[bestMatch.bestMatchIndex];
-            }
-        }
 
         if (!POI_LIST.includes(correctedPOI)) {
             console.log(`❌ Invalid Claim: ${playerName} attempted to claim an unknown POI: ${correctedPOI}`);
