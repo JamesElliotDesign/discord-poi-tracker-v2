@@ -40,8 +40,7 @@ const POI_MAP = {
     "Kamensk Heli Depot T3": "Kamensk",
     "Tisy Power Plant T4": "Tisy",
     "Krasno Warehouse T2": "Krasno",
-    "Balota Warehouse T1": "Balota",
-    ...EXCLUDED_POIS.reduce((acc, poi) => ({ ...acc, [poi]: poi }), {}) // Ensure excluded POIs exist in mapping
+    "Balota Warehouse T1": "Balota"
 };
 
 // 🔄 **Reverse Lookup Map** (Abbreviated → Full POI Name)
@@ -49,14 +48,7 @@ const ABBREVIATED_TO_FULL_POI = Object.fromEntries(
     Object.entries(POI_MAP).map(([full, short]) => [short.toLowerCase(), full])
 );
 
-// 🟢 Dictionary for First Word Matching
-const FIRST_WORDS_MAP = {};
-Object.keys(POI_MAP).forEach(poi => {
-    const firstWord = poi.split(" ")[0].toLowerCase();
-    FIRST_WORDS_MAP[firstWord] = poi;
-});
-
-// Lowercase POI list for similarity matching
+// 🔄 **Lowercase POI List for Fuzzy Matching**
 const POI_LIST_LOWER = Object.keys(POI_MAP).map(poi => poi.toLowerCase());
 
 /**
@@ -111,7 +103,7 @@ app.post("/webhook", async (req, res) => {
 
     console.log(`[Game Chat] ${playerName}: ${messageContent}`);
 
-    // 🟢 Check if player typed "check claims"
+    // 🟢 "Check Claims" command
     if (CHECK_CLAIMS_REGEX.test(messageContent)) {
         let availablePOIs = Object.keys(POI_MAP).filter(poi => !CLAIMS[poi] && !EXCLUDED_POIS.includes(poi)); // Only show unclaimed POIs
 
@@ -126,7 +118,7 @@ app.post("/webhook", async (req, res) => {
         return res.sendStatus(204);
     }
 
-    // 🟢 Check if player is checking a specific POI
+    // 🟢 "Check POI" command
     const checkMatch = messageContent.match(CHECK_POI_REGEX);
     if (checkMatch) {
         let detectedPOI = checkMatch[1].trim().toLowerCase();
@@ -134,18 +126,22 @@ app.post("/webhook", async (req, res) => {
         // ✅ 1️⃣ First, check against **abbreviated names**
         let correctedPOI = ABBREVIATED_TO_FULL_POI[detectedPOI];
 
-        // ✅ 2️⃣ If not found, check using **string similarity**
+        // ✅ 2️⃣ If not found, use **fuzzy matching**
         if (!correctedPOI) {
             let bestMatch = stringSimilarity.findBestMatch(detectedPOI, POI_LIST_LOWER);
-            correctedPOI = bestMatch.bestMatch.rating > 0.5 ? Object.keys(POI_MAP)[bestMatch.bestMatchIndex] : null;
+            if (bestMatch.bestMatch.rating > 0.5) {
+                correctedPOI = Object.keys(POI_MAP)[bestMatch.bestMatchIndex];
+            }
         }
 
-        if (!correctedPOI || EXCLUDED_POIS.includes(correctedPOI)) {
+        // ✅ 3️⃣ If POI is still not found
+        if (!correctedPOI || !POI_MAP.hasOwnProperty(correctedPOI)) {
             console.log(`❌ Unknown POI Check: ${playerName} attempted to check '${detectedPOI}'`);
             await sendServerMessage(`Unknown POI: ${detectedPOI}. Try 'check claims' to see available POIs.`);
             return res.sendStatus(204);
         }
 
+        // ✅ 4️⃣ Respond with POI availability
         if (CLAIMS[correctedPOI]) {
             let timeSinceClaim = Math.floor((Date.now() - CLAIMS[correctedPOI].timestamp) / 60000);
             let claimMessage = `${POI_MAP[correctedPOI]} is currently claimed by ${CLAIMS[correctedPOI].player} ${timeSinceClaim} minutes ago.`;
@@ -156,28 +152,6 @@ app.post("/webhook", async (req, res) => {
             await sendServerMessage(`${POI_MAP[correctedPOI]} is available to claim!`);
         }
         return res.sendStatus(204);
-    }
-
-    // 🟢 Check if player is claiming a POI
-    const match = messageContent.match(CLAIM_REGEX);
-    if (match) {
-        let detectedPOI = match[1].trim().toLowerCase();
-        let detectedFirstWord = detectedPOI.split(" ")[0];
-
-        let bestFirstWordMatch = stringSimilarity.findBestMatch(detectedFirstWord, Object.keys(FIRST_WORDS_MAP));
-        let correctedPOI = bestFirstWordMatch.bestMatch.rating > 0.5
-            ? FIRST_WORDS_MAP[bestFirstWordMatch.bestMatch.target]
-            : detectedPOI;
-
-        if (!POI_LIST.includes(correctedPOI)) {
-            console.log(`❌ Invalid Claim: ${playerName} attempted to claim an unknown POI: ${correctedPOI}`);
-            return res.sendStatus(204);
-        }
-
-        CLAIMS[correctedPOI] = { player: playerName, timestamp: Date.now() };
-        let claimMessage = `${playerName} claimed ${POI_MAP[correctedPOI]}.`;
-        console.log(`✅ Claim Accepted: ${claimMessage}`);
-        await sendServerMessage(claimMessage);
     }
 
     res.sendStatus(204);
