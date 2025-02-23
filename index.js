@@ -5,7 +5,7 @@ const { sendServerMessage } = require("./services/cftoolsService");
 
 require("dotenv").config();
 
-const PORT = process.env.PORT || 8080;
+const PORT = process.env.PORT || 8080; // Railway uses 8080
 const CF_WEBHOOK_SECRET = process.env.CF_WEBHOOK_SECRET;
 
 const app = express();
@@ -61,26 +61,28 @@ function validateSignature(req) {
  * Webhook endpoint for CFTools events
  */
 app.post("/webhook", async (req, res) => {
-    if (!validateSignature(req)) {
-        return res.sendStatus(403);
-    }
-
     const eventType = req.headers["x-hephaistos-event"];
     const eventData = req.body;
 
     console.log(`[${new Date().toISOString()}] 🔹 Received Event: ${eventType}`);
 
+    // ✅ **Fix Webhook Verification Handling**
     if (eventType === "verification") {
-        console.log("✅ Webhook Verified");
-        return res.sendStatus(204);
+        console.log("✅ Webhook Verified Successfully!");
+        return res.sendStatus(204); // Important: Respond immediately!
     }
 
-    // Correct event type for chat messages
+    // ✅ **Fix Incorrect Event Type Handling**
     if (eventType !== "gameserver.chat.message") {
         console.log(`ℹ️ Ignoring unrelated event type: ${eventType}`);
         return res.sendStatus(204);
     }
 
+    if (!validateSignature(req)) {
+        return res.sendStatus(403);
+    }
+
+    // ✅ Process Game Chat Messages
     const messageContent = eventData.message;
     const playerName = eventData.player.name;
 
