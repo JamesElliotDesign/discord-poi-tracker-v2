@@ -1,128 +1,139 @@
-const express = require('express');
-const crypto = require('crypto'); // ✅ Required for signature verification
-const fs = require('fs');
-const stringSimilarity = require('string-similarity');
-const { getServerInfo, sendServerMessage } = require('./services/cftoolsService'); // ❌ Removed registerWebhook
-require('dotenv').config();
+const express = require("express");
+const crypto = require("crypto");
+const stringSimilarity = require("string-similarity");
+const { sendServerMessage } = require("./services/cftoolsService");
+
+require("dotenv").config();
+
+const PORT = process.env.PORT || 8080;
+const CF_WEBHOOK_SECRET = process.env.CF_WEBHOOK_SECRET;
 
 const app = express();
-const PORT = process.env.PORT || 3000;
-const WEBHOOK_SECRET = process.env.CFTOOLS_WEBHOOK_SECRET; // ✅ New Secret for verification
+app.use(express.json());
 
-app.use(express.json({ verify: (req, res, buf) => { req.rawBody = buf; }})); // ✅ Store raw request body for verification
-
-// Store webhook logs for debugging
-const LOG_FILE = 'webhook_logs.json';
-const logWebhookData = (data) => {
-    fs.appendFile(LOG_FILE, JSON.stringify(data, null, 2) + "\n", (err) => {
-        if (err) console.error("Error logging webhook data:", err);
-    });
-};
-
+const CLAIMS = {}; // Stores active POI claims
 const CLAIM_REGEX = /\bCLAIM\s+([A-Za-z0-9_ -]+)\b/i;
+
 const POI_LIST = [
-    "Sinystok Bunker T5", "Yephbin Underground Facility T4", "Rostoki Castle T5", "Svetloyarsk Oil Rig T4", 
-    "Elektro Radier Outpost T1", "Tracksuit Tower T1", "Otmel Raider Outpost T1", "Svetloyarsk Raider Outpost T1", 
-    "Solenchny Raider Outpost T1", "Klyuch Military T2", "Rog Castle Military T2", "Zub Castle Military T3", 
-    "Kamensk Heli Depot T3", "Tisy Power Plant T4", "Krasno Warehouse T2", "Balota Warehouse T1"
+    "Sinystok Bunker T5", "Yephbin Underground Facility T4", "Rostoki Castle T5",
+    "Svetloyarsk Oil Rig T4", "Elektro Radier Outpost T1", "Tracksuit Tower T1",
+    "Otmel Raider Outpost T1", "Svetloyarsk Raider Outpost T1", "Solenchny Raider Outpost T1",
+    "Klyuch Military T2", "Rog Castle Military T2", "Zub Castle Military T3",
+    "Kamensk Heli Depot T3", "Tisy Power Plant T4", "Krasno Warehouse T2",
+    "Balota Warehouse T1", "Heli Crash (Active Now)", "Hunter Camp (Active Now)", "Airdrop (Active Now)"
 ];
 
-const CLAIMS = {};
+// Create a dictionary of first words mapped to full POI names
+const FIRST_WORDS_MAP = {};
+POI_LIST.forEach(poi => {
+    const firstWord = poi.split(" ")[0].toLowerCase(); // Get the first word of the POI
+    FIRST_WORDS_MAP[firstWord] = poi;
+});
 
-// ✅ Function to verify webhook request signature
-const verifySignature = (req) => {
-    const receivedSignature = req.headers['x-hephaistos-signature']; // ✅ CORRECT HEADER
-    const deliveryId = req.headers['x-hephaistos-delivery']; // ✅ REQUIRED FOR SIGNING
+// Lowercase POI list for similarity matching
+const POI_LIST_LOWER = POI_LIST.map(poi => poi.toLowerCase());
 
-    if (!receivedSignature || !WEBHOOK_SECRET || !deliveryId) {
-        console.error("❌ Missing required headers for signature verification.");
+/**
+ * Validate webhook signature
+ */
+function validateSignature(req) {
+    const deliveryUUID = req.headers["x-hephaistos-delivery"];
+    const receivedSignature = req.headers["x-hephaistos-signature"];
+
+    if (!deliveryUUID || !receivedSignature) {
+        console.log("❌ Missing Webhook Signature Headers");
         return false;
     }
 
-    // Generate expected signature
-    const expectedSignature = crypto.createHash('sha256')
-        .update(deliveryId + WEBHOOK_SECRET)
-        .digest('hex');
+    const localSignature = crypto.createHash("sha256")
+        .update(deliveryUUID + CF_WEBHOOK_SECRET)
+        .digest("hex");
 
-    if (expectedSignature !== receivedSignature) {
-        console.error(`❌ Webhook Signature Mismatch! Expected: ${expectedSignature}, Received: ${receivedSignature}`);
+    if (localSignature !== receivedSignature) {
+        console.log("❌ Webhook signature mismatch!");
         return false;
     }
 
-    console.log("✅ Webhook Signature Verified!");
     return true;
-};
+}
 
-// ✅ Initialize and Fetch Server Info on Startup
-(async () => {
-    try {
-        const serverInfo = await getServerInfo();
-        console.log("✅ Connected to CFTools API");
-        console.log("🔹 Server Name:", serverInfo.server._object.nickname);
-        console.log("🔹 Server ID:", serverInfo.server.gameserver.gameserver_id);
-        console.log("🔹 Connection Protocol:", serverInfo.server.connection.protcol_used);
-        console.log("🔹 Worker State:", serverInfo.server.worker.state);
-        console.log("✅ Webhook should already be manually registered in CFTools Cloud.");
-    } catch (error) {
-        console.error("❌ Error during API communication:", error.message);
+/**
+ * Webhook endpoint for CFTools events
+ */
+app.post("/webhook", async (req, res) => {
+    if (!validateSignature(req)) {
+        return res.sendStatus(403);
     }
-})();
 
-// ✅ Webhook Route to receive CF Tools Chat Data
-app.post('/webhook', async (req, res) => {
-    try {
-        if (!verifySignature(req)) {
-            console.error("❌ Webhook signature verification failed!");
-            return res.status(403).send('Forbidden');
-        }
+    const eventType = req.headers["x-hephaistos-event"];
+    const eventData = req.body;
 
-        const data = req.body;
-        logWebhookData(data);
+    console.log(`[${new Date().toISOString()}] 🔹 Received Event: ${eventType}`);
 
-        if (!data || !data.message || !data.username) {
-            return res.status(400).send('Invalid Data');
-        }
+    if (eventType === "verification") {
+        console.log("✅ Webhook Verified");
+        return res.sendStatus(204);
+    }
 
-        const playerName = data.username;
-        const messageContent = data.message;
+    // Correct event type for chat messages
+    if (eventType !== "gameserver.chat.message") {
+        console.log(`ℹ️ Ignoring unrelated event type: ${eventType}`);
+        return res.sendStatus(204);
+    }
 
-        console.log(`[Game Chat] ${playerName}: ${messageContent}`);
+    const messageContent = eventData.message;
+    const playerName = eventData.player.name;
 
-        const match = messageContent.match(CLAIM_REGEX);
-        if (match) {
-            let detectedPOI = match[1].trim().toLowerCase();
+    console.log(`[Game Chat] ${playerName}: ${messageContent}`);
 
-            // Find the closest match in POI list
-            let bestMatch = stringSimilarity.findBestMatch(detectedPOI, POI_LIST);
-            let correctedPOI = bestMatch.bestMatch.rating > 0.5 ? POI_LIST[bestMatch.bestMatchIndex] : null;
+    const match = messageContent.match(CLAIM_REGEX);
+    if (match) {
+        let detectedPOI = match[1].trim().toLowerCase();
+        let detectedFirstWord = detectedPOI.split(" ")[0];
 
-            if (correctedPOI) {
-                if (CLAIMS[correctedPOI]) {
-                    const timeElapsed = Math.floor((Date.now() - CLAIMS[correctedPOI].timestamp) / 60000);
-                    const claimer = CLAIMS[correctedPOI].player;
-                    console.log(`🚫 POI Already Claimed: ${claimer} already claimed ${correctedPOI} ${timeElapsed} minutes ago.`);
-                    await sendServerMessage(`${claimer} already claimed ${correctedPOI} ${timeElapsed} minutes ago.`);
-                } else {
-                    CLAIMS[correctedPOI] = { player: playerName, timestamp: Date.now() };
-                    console.log(`✅ Claim Accepted: ${playerName} claimed ${correctedPOI}.`);
-                    await sendServerMessage(`${playerName} claimed ${correctedPOI}.`);
+        let bestFirstWordMatch = stringSimilarity.findBestMatch(detectedFirstWord, Object.keys(FIRST_WORDS_MAP));
+        let correctedPOI = bestFirstWordMatch.bestMatch.rating > 0.5
+            ? FIRST_WORDS_MAP[bestFirstWordMatch.bestMatch.target]
+            : detectedPOI;
 
-                    // Set a 45-minute expiry on the claim
-                    setTimeout(() => {
-                        delete CLAIMS[correctedPOI];
-                        console.log(`🔄 Claim expired: ${correctedPOI} is now available.`);
-                    }, 45 * 60 * 1000);
-                }
-            } else {
-                console.log(`❌ Invalid POI Claim: ${playerName} tried to claim '${detectedPOI}', but no match found.`);
+        if (bestFirstWordMatch.bestMatch.rating < 0.5) {
+            let bestMatch = stringSimilarity.findBestMatch(detectedPOI, POI_LIST_LOWER);
+            if (bestMatch.bestMatch.rating > 0.5) {
+                correctedPOI = POI_LIST[bestMatch.bestMatchIndex];
             }
         }
 
-        res.status(200).send('Received');
-    } catch (error) {
-        console.error("❌ Error processing webhook:", error);
-        res.status(500).send('Server Error');
+        if (!POI_LIST.includes(correctedPOI)) {
+            console.log(`❌ Invalid Claim: ${playerName} attempted to claim an unknown POI: ${correctedPOI}`);
+            return res.sendStatus(204);
+        }
+
+        console.log(`[CLAIM DETECTED] Player: ${playerName} | POI: ${correctedPOI} (Originally: ${match[1].trim()})`);
+
+        if (CLAIMS[correctedPOI]) {
+            let timeSinceClaim = Math.floor((Date.now() - CLAIMS[correctedPOI].timestamp) / 60000);
+            let responseMessage = `${CLAIMS[correctedPOI].player} already claimed ${correctedPOI} ${timeSinceClaim} minutes ago.`;
+            console.log(`🚫 POI Already Claimed: ${responseMessage}`);
+            await sendServerMessage(responseMessage);
+        } else {
+            CLAIMS[correctedPOI] = { player: playerName, timestamp: Date.now() };
+            let claimMessage = `${playerName} claimed ${correctedPOI}.`;
+            console.log(`✅ Claim Accepted: ${claimMessage}`);
+            await sendServerMessage(claimMessage);
+
+            setTimeout(() => {
+                delete CLAIMS[correctedPOI];
+                console.log(`🕒 POI Reset: ${correctedPOI} is now available again.`);
+            }, 45 * 60 * 1000); // Reset after 45 minutes
+        }
     }
+
+    res.sendStatus(204);
 });
 
-app.listen(PORT, () => console.log(`🚀 Webhook listening on port ${PORT}`));
+/**
+ * Start the Express server
+ */
+app.listen(PORT, () => {
+    console.log(`🚀 Webhook Server listening on port ${PORT}`);
+});
