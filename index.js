@@ -2,7 +2,7 @@ const express = require('express');
 const crypto = require('crypto'); // ✅ Required for signature verification
 const fs = require('fs');
 const stringSimilarity = require('string-similarity');
-const { getServerInfo, sendServerMessage, registerWebhook } = require('./services/cftoolsService');
+const { getServerInfo, sendServerMessage } = require('./services/cftoolsService'); // ❌ Removed registerWebhook
 require('dotenv').config();
 
 const app = express();
@@ -63,8 +63,6 @@ const verifySignature = (req) => {
         console.log("🔹 Connection Protocol:", serverInfo.server.connection.protcol_used);
         console.log("🔹 Worker State:", serverInfo.server.worker.state);
         console.log("✅ Webhook should already be manually registered in CFTools Cloud.");
-        console.log("🔗 Registering CF Tools Webhook...");
-        await registerWebhook(process.env.CFTOOLS_WEBHOOK_URL);
     } catch (error) {
         console.error("❌ Error during API communication:", error.message);
     }
