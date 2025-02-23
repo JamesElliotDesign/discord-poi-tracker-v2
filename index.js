@@ -49,7 +49,7 @@ const ABBREVIATED_TO_FULL_POI = Object.fromEntries(
 );
 
 // 🔄 Lowercase POI List for Fuzzy Matching
-const POI_LIST_LOWER = Object.keys(POI_MAP).map(poi => poi.toLowerCase());
+const POI_ABBREVIATIONS_LOWER = Object.values(POI_MAP).map(poi => poi.toLowerCase());
 
 /**
  * Validate webhook signature
@@ -118,14 +118,16 @@ app.post("/webhook", async (req, res) => {
         return res.sendStatus(204);
     }
 
-    // 🟢 "Check POI" command
+    // 🟢 "Check POI" command (Fixing Abbreviations & Typos)
     const checkMatch = messageContent.match(CHECK_POI_REGEX);
     if (checkMatch) {
         let detectedPOI = checkMatch[1].trim().toLowerCase();
+
+        // 🔍 Fuzzy match for POI abbreviation
         let correctedPOI = ABBREVIATED_TO_FULL_POI[detectedPOI];
 
         if (!correctedPOI) {
-            let bestMatch = stringSimilarity.findBestMatch(detectedPOI, Object.values(POI_MAP).map(poi => poi.toLowerCase()));
+            let bestMatch = stringSimilarity.findBestMatch(detectedPOI, POI_ABBREVIATIONS_LOWER);
             if (bestMatch.bestMatch.rating > 0.5) {
                 correctedPOI = Object.keys(POI_MAP).find(key => POI_MAP[key].toLowerCase() === bestMatch.bestMatch.target);
             }
@@ -156,7 +158,7 @@ app.post("/webhook", async (req, res) => {
         let correctedPOI = ABBREVIATED_TO_FULL_POI[detectedPOI];
 
         if (!correctedPOI) {
-            let bestMatch = stringSimilarity.findBestMatch(detectedPOI, Object.values(POI_MAP).map(poi => poi.toLowerCase()));
+            let bestMatch = stringSimilarity.findBestMatch(detectedPOI, POI_ABBREVIATIONS_LOWER);
             if (bestMatch.bestMatch.rating > 0.5) {
                 correctedPOI = Object.keys(POI_MAP).find(key => POI_MAP[key].toLowerCase() === bestMatch.bestMatch.target);
             }
