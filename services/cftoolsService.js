@@ -69,17 +69,15 @@ async function sendServerMessage(content) {
 }
 
 // ✅ Register Webhook with CF Tools
+// ✅ Register Webhook with CFTools Hephaistos API
 async function registerWebhook(url) {
     try {
         if (!authToken || Date.now() >= tokenExpiration) await authenticate();
 
-        console.log(`🔍 Attempting to register Hephaistos webhook for SERVER_API_ID: ${SERVER_API_ID}`);
-        console.log(`🔗 Webhook URL: ${url}`);
-
-        const response = await axios.post(`${API_BASE_URL}/server/${SERVER_API_ID}/hephaistos/webhook`, { 
+        const response = await axios.post(`${API_BASE_URL}/server/${SERVER_API_ID}/hephaistos/webhook`, {
             url,
             secret: WEBHOOK_SECRET,
-            events: ["chat_message"] // Listens to in-game chat messages
+            events: ["chat_message"] // ✅ Make sure this event type is supported
         }, {
             headers: {
                 "Authorization": `Bearer ${authToken}`,
@@ -87,7 +85,8 @@ async function registerWebhook(url) {
             }
         });
 
-        console.log(`✅ Hephaistos Webhook registered successfully at: ${url}`, response.data);
+        console.log(`✅ Hephaistos Webhook registered successfully at: ${url}`);
+        console.log("🔹 Webhook Events: chat_message");
     } catch (error) {
         console.error("❌ Failed to register Hephaistos webhook:", error.response?.data || error.message);
     }
