@@ -15,13 +15,20 @@ const CLAIMS = {}; // Stores active POI claims
 const CLAIM_REGEX = /\bCLAIM\s+([A-Za-z0-9_ -]+)\b/i;
 const CHECK_CLAIMS_REGEX = /\bcheck claims\b/i; // Detects "check claims" command
 
+// 🛑 POIs that should NOT be listed in "Check Claims"
+const EXCLUDED_POIS = [
+    "Heli Crash (Active Now)",
+    "Hunter Camp (Active Now)",
+    "Airdrop (Active Now)"
+];
+
 const POI_LIST = [
     "Sinystok Bunker T5", "Yephbin Underground Facility T4", "Rostoki Castle T5",
     "Svetloyarsk Oil Rig T4", "Elektro Radier Outpost T1", "Tracksuit Tower T1",
     "Otmel Raider Outpost T1", "Svetloyarsk Raider Outpost T1", "Solenchny Raider Outpost T1",
     "Klyuch Military T2", "Rog Castle Military T2", "Zub Castle Military T3",
     "Kamensk Heli Depot T3", "Tisy Power Plant T4", "Krasno Warehouse T2",
-    "Balota Warehouse T1", "Heli Crash (Active Now)", "Hunter Camp (Active Now)", "Airdrop (Active Now)"
+    "Balota Warehouse T1", ...EXCLUDED_POIS
 ];
 
 // Create a dictionary of first words mapped to full POI names
@@ -88,12 +95,15 @@ app.post("/webhook", async (req, res) => {
 
     // 🟢 Check if player typed "check claims"
     if (CHECK_CLAIMS_REGEX.test(messageContent)) {
-        let availablePOIs = POI_LIST.filter(poi => !CLAIMS[poi]); // Only show unclaimed POIs
+        let availablePOIs = POI_LIST.filter(poi => !CLAIMS[poi] && !EXCLUDED_POIS.includes(poi)); // Only show unclaimed POIs
 
         if (availablePOIs.length === 0) {
             await sendServerMessage("All POIs are currently claimed.");
         } else {
-            let availableList = availablePOIs.join(", ");
+            // 🚀 Remove T1, T2, etc., from POI names to save space
+            let formattedPOIs = availablePOIs.map(poi => poi.replace(/\sT\d+$/, ""));
+            let availableList = formattedPOIs.join(", ");
+
             await sendServerMessage(`Available POIs: ${availableList}`);
         }
         return res.sendStatus(204);
