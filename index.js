@@ -22,16 +22,31 @@ const EXCLUDED_POIS = [
     "Airdrop (Active Now)"
 ];
 
-const POI_LIST = [
-    "Sinystok Bunker T5", "Yephbin Underground Facility T4", "Rostoki Castle T5",
-    "Svetloyarsk Oil Rig T4", "Elektro Radier Outpost T1", "Tracksuit Tower T1",
-    "Otmel Raider Outpost T1", "Svetloyarsk Raider Outpost T1", "Solenchny Raider Outpost T1",
-    "Klyuch Military T2", "Rog Castle Military T2", "Zub Castle Military T3",
-    "Kamensk Heli Depot T3", "Tisy Power Plant T4", "Krasno Warehouse T2",
-    "Balota Warehouse T1", ...EXCLUDED_POIS
-];
+// 🟢 POI LIST with Abbreviations for "Check Claims"
+const POI_MAP = {
+    "Sinystok Bunker T5": "Sinystok Bunker",
+    "Yephbin Underground Facility T4": "Yephbin",
+    "Rostoki Castle T5": "Rostoki",
+    "Svetloyarsk Oil Rig T4": "Oil Rig",
+    "Elektro Radier Outpost T1": "Elektro",
+    "Tracksuit Tower T1": "Tracksuit Tower",
+    "Otmel Raider Outpost T1": "Otmel",
+    "Svetloyarsk Raider Outpost T1": "Svetloyarsk",
+    "Solenchny Raider Outpost T1": "Solenchny",
+    "Klyuch Military T2": "Klyuch",
+    "Rog Castle Military T2": "Rog",
+    "Zub Castle Military T3": "Zub",
+    "Kamensk Heli Depot T3": "Kamensk",
+    "Tisy Power Plant T4": "Tisy",
+    "Krasno Warehouse T2": "Krasno",
+    "Balota Warehouse T1": "Balota",
+    ...EXCLUDED_POIS.reduce((acc, poi) => ({ ...acc, [poi]: poi }), {}) // Ensure excluded POIs exist in mapping
+};
 
-// Create a dictionary of first words mapped to full POI names
+// 🟢 Reverse POI Lookup (for claim detection)
+const POI_LIST = Object.keys(POI_MAP);
+
+// 🟢 Dictionary for First Word Matching
 const FIRST_WORDS_MAP = {};
 POI_LIST.forEach(poi => {
     const firstWord = poi.split(" ")[0].toLowerCase();
@@ -100,8 +115,8 @@ app.post("/webhook", async (req, res) => {
         if (availablePOIs.length === 0) {
             await sendServerMessage("All POIs are currently claimed.");
         } else {
-            // 🚀 Remove T1, T2, etc., from POI names to save space
-            let formattedPOIs = availablePOIs.map(poi => poi.replace(/\sT\d+$/, ""));
+            // 🚀 Use abbreviated POI names for output
+            let formattedPOIs = availablePOIs.map(poi => POI_MAP[poi]);
             let availableList = formattedPOIs.join(", ");
 
             await sendServerMessage(`Available POIs: ${availableList}`);
@@ -132,22 +147,22 @@ app.post("/webhook", async (req, res) => {
             return res.sendStatus(204);
         }
 
-        console.log(`[CLAIM DETECTED] Player: ${playerName} | POI: ${correctedPOI} (Originally: ${match[1].trim()})`);
+        console.log(`[CLAIM DETECTED] Player: ${playerName} | POI: ${POI_MAP[correctedPOI]} (Originally: ${match[1].trim()})`);
 
         if (CLAIMS[correctedPOI]) {
             let timeSinceClaim = Math.floor((Date.now() - CLAIMS[correctedPOI].timestamp) / 60000);
-            let responseMessage = `${CLAIMS[correctedPOI].player} already claimed ${correctedPOI} ${timeSinceClaim} minutes ago.`;
+            let responseMessage = `${CLAIMS[correctedPOI].player} already claimed ${POI_MAP[correctedPOI]} ${timeSinceClaim} minutes ago.`;
             console.log(`🚫 POI Already Claimed: ${responseMessage}`);
             await sendServerMessage(responseMessage);
         } else {
             CLAIMS[correctedPOI] = { player: playerName, timestamp: Date.now() };
-            let claimMessage = `${playerName} claimed ${correctedPOI}.`;
+            let claimMessage = `${playerName} claimed ${POI_MAP[correctedPOI]}.`;
             console.log(`✅ Claim Accepted: ${claimMessage}`);
             await sendServerMessage(claimMessage);
 
             setTimeout(() => {
                 delete CLAIMS[correctedPOI];
-                console.log(`🕒 POI Reset: ${correctedPOI} is now available again.`);
+                console.log(`🕒 POI Reset: ${POI_MAP[correctedPOI]} is now available again.`);
             }, 45 * 60 * 1000); // Reset after 45 minutes
         }
     }
