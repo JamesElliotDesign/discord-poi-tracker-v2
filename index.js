@@ -5,7 +5,7 @@ const { sendServerMessage } = require("./services/cftoolsService");
 
 require("dotenv").config();
 
-const PORT = process.env.PORT || 8080; // Railway uses 8080
+const PORT = process.env.PORT || 8080;
 const CF_WEBHOOK_SECRET = process.env.CF_WEBHOOK_SECRET;
 
 const app = express();
@@ -13,6 +13,7 @@ app.use(express.json());
 
 const CLAIMS = {}; // Stores active POI claims
 const CLAIM_REGEX = /\bCLAIM\s+([A-Za-z0-9_ -]+)\b/i;
+const CHECK_CLAIMS_REGEX = /\bcheck claims\b/i; // Detects "check claims" command
 
 const POI_LIST = [
     "Sinystok Bunker T5", "Yephbin Underground Facility T4", "Rostoki Castle T5",
@@ -26,7 +27,7 @@ const POI_LIST = [
 // Create a dictionary of first words mapped to full POI names
 const FIRST_WORDS_MAP = {};
 POI_LIST.forEach(poi => {
-    const firstWord = poi.split(" ")[0].toLowerCase(); // Get the first word of the POI
+    const firstWord = poi.split(" ")[0].toLowerCase();
     FIRST_WORDS_MAP[firstWord] = poi;
 });
 
@@ -61,34 +62,44 @@ function validateSignature(req) {
  * Webhook endpoint for CFTools events
  */
 app.post("/webhook", async (req, res) => {
+    if (!validateSignature(req)) {
+        return res.sendStatus(403);
+    }
+
     const eventType = req.headers["x-hephaistos-event"];
     const eventData = req.body;
 
     console.log(`[${new Date().toISOString()}] 🔹 Received Event: ${eventType}`);
-    console.log(`📜 Full Event Data:`, JSON.stringify(eventData, null, 2)); // Debugging log
 
-    // ✅ Webhook Verification Handling
     if (eventType === "verification") {
         console.log("✅ Webhook Verified Successfully!");
         return res.sendStatus(204);
     }
 
-    // ✅ Accept `user.chat` Events
     if (eventType !== "user.chat") {
         console.log(`ℹ️ Ignoring unrelated event type: ${eventType}`);
         return res.sendStatus(204);
     }
 
-    if (!validateSignature(req)) {
-        return res.sendStatus(403);
-    }
-
-    // ✅ Extract Player Name & Message (Using Correct Keys)
-    const playerName = eventData.player_name || "Unknown Player"; // Corrected key
-    const messageContent = eventData.message || ""; // Corrected key
+    const messageContent = eventData.message.toLowerCase();
+    const playerName = eventData.player_name;
 
     console.log(`[Game Chat] ${playerName}: ${messageContent}`);
 
+    // 🟢 Check if player typed "check claims"
+    if (CHECK_CLAIMS_REGEX.test(messageContent)) {
+        let availablePOIs = POI_LIST.filter(poi => !CLAIMS[poi]); // Only show unclaimed POIs
+
+        if (availablePOIs.length === 0) {
+            await sendServerMessage("All POIs are currently claimed.");
+        } else {
+            let availableList = availablePOIs.join(", ");
+            await sendServerMessage(`Available POIs: ${availableList}`);
+        }
+        return res.sendStatus(204);
+    }
+
+    // 🟢 Check if player is claiming a POI
     const match = messageContent.match(CLAIM_REGEX);
     if (match) {
         let detectedPOI = match[1].trim().toLowerCase();
