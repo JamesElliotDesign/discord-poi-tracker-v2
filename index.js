@@ -83,15 +83,9 @@ app.post("/webhook", async (req, res) => {
         return res.sendStatus(403);
     }
 
-    // ✅ **Safeguard Against Undefined Player Data**
-    if (!eventData || !eventData.message || !eventData.player || !eventData.player.name) {
-        console.log("⚠️ Missing player data in event, skipping.");
-        return res.sendStatus(204);
-    }
-
-    // ✅ Process Game Chat Messages
-    const messageContent = eventData.message;
-    const playerName = eventData.player.name;
+    // ✅ Extract Player Name & Message (Using Correct Keys)
+    const playerName = eventData.player_name || "Unknown Player"; // Corrected key
+    const messageContent = eventData.message || ""; // Corrected key
 
     console.log(`[Game Chat] ${playerName}: ${messageContent}`);
 
