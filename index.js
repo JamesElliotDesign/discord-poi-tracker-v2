@@ -1,0 +1,101 @@
+const express = require('express');
+const fs = require('fs');
+const stringSimilarity = require('string-similarity');
+const { getServerInfo, sendServerMessage, registerWebhook } = require('./services/cftoolsService');
+require('dotenv').config();
+
+const app = express();
+const PORT = process.env.PORT || 3000;
+const WEBHOOK_URL = process.env.CFTOOLS_WEBHOOK_URL;
+
+app.use(express.json());
+
+// Store webhook logs for debugging
+const LOG_FILE = 'webhook_logs.json';
+const logWebhookData = (data) => {
+    fs.appendFile(LOG_FILE, JSON.stringify(data, null, 2) + "\n", (err) => {
+        if (err) console.error("Error logging webhook data:", err);
+    });
+};
+
+const CLAIM_REGEX = /\bCLAIM\s+([A-Za-z0-9_ -]+)\b/i;
+
+const POI_LIST = [
+    "Sinystok Bunker T5", "Yephbin Underground Facility T4", "Rostoki Castle T5", "Svetloyarsk Oil Rig T4", 
+    "Elektro Radier Outpost T1", "Tracksuit Tower T1", "Otmel Raider Outpost T1", "Svetloyarsk Raider Outpost T1", 
+    "Solenchny Raider Outpost T1", "Klyuch Military T2", "Rog Castle Military T2", "Zub Castle Military T3", 
+    "Kamensk Heli Depot T3", "Tisy Power Plant T4", "Krasno Warehouse T2", "Balota Warehouse T1"
+];
+
+const CLAIMS = {};
+
+// ✅ Register webhook on startup
+(async () => {
+    try {
+        const serverInfo = await getServerInfo();
+        console.log("✅ Connected to CFTools API");
+        console.log("🔹 Server Name:", serverInfo.server._object.nickname);
+        console.log("🔹 Server ID:", serverInfo.server.gameserver.gameserver_id);
+        console.log("🔹 Connection Protocol:", serverInfo.server.connection.protcol_used);
+        console.log("🔹 Worker State:", serverInfo.server.worker.state);
+
+        console.log("🔗 Registering CF Tools Webhook...");
+        await registerWebhook(WEBHOOK_URL);
+    } catch (error) {
+        console.error("❌ Error during API communication:", error.message);
+    }
+})();
+
+// ✅ Webhook Route to receive CF Tools Chat Data
+app.post('/webhook', async (req, res) => {
+    try {
+        const data = req.body;
+        logWebhookData(data);
+        
+        if (!data || !data.message || !data.username) {
+            return res.status(400).send('Invalid Data');
+        }
+
+        const playerName = data.username;
+        const messageContent = data.message;
+        
+        console.log(`[Game Chat] ${playerName}: ${messageContent}`);
+        
+        const match = messageContent.match(CLAIM_REGEX);
+        if (match) {
+            let detectedPOI = match[1].trim().toLowerCase();
+            
+            // Find the closest match in POI list
+            let bestMatch = stringSimilarity.findBestMatch(detectedPOI, POI_LIST);
+            let correctedPOI = bestMatch.bestMatch.rating > 0.5 ? POI_LIST[bestMatch.bestMatchIndex] : null;
+            
+            if (correctedPOI) {
+                if (CLAIMS[correctedPOI]) {
+                    const timeElapsed = Math.floor((Date.now() - CLAIMS[correctedPOI].timestamp) / 60000);
+                    const claimer = CLAIMS[correctedPOI].player;
+                    console.log(`🚫 POI Already Claimed: ${claimer} already claimed ${correctedPOI} ${timeElapsed} minutes ago.`);
+                    await sendServerMessage(`${claimer} already claimed ${correctedPOI} ${timeElapsed} minutes ago.`);
+                } else {
+                    CLAIMS[correctedPOI] = { player: playerName, timestamp: Date.now() };
+                    console.log(`✅ Claim Accepted: ${playerName} claimed ${correctedPOI}.`);
+                    await sendServerMessage(`${playerName} claimed ${correctedPOI}.`);
+
+                    // Set a 45-minute expiry on the claim
+                    setTimeout(() => {
+                        delete CLAIMS[correctedPOI];
+                        console.log(`🔄 Claim expired: ${correctedPOI} is now available.`);
+                    }, 45 * 60 * 1000);
+                }
+            } else {
+                console.log(`❌ Invalid POI Claim: ${playerName} tried to claim '${detectedPOI}', but no match found.`);
+            }
+        }
+
+        res.status(200).send('Received');
+    } catch (error) {
+        console.error("❌ Error processing webhook:", error);
+        res.status(500).send('Server Error');
+    }
+});
+
+app.listen(PORT, () => console.log(`🚀 Webhook listening on port ${PORT}`));
