@@ -158,8 +158,13 @@ app.post("/webhook", async (req, res) => {
         let detectedPOI = claimMatch[1].trim().toLowerCase();
         let correctedPOI = ABBREVIATED_TO_FULL_POI[detectedPOI];
 
-        if (!correctedPOI || CLAIMS[correctedPOI]) {
-            console.log(`❌ Invalid or already claimed POI: ${detectedPOI}`);
+        if (!correctedPOI) return res.sendStatus(204);
+
+        if (CLAIMS[correctedPOI]) {
+            let timeSinceClaim = Math.floor((Date.now() - CLAIMS[correctedPOI].timestamp) / 60000);
+            let responseMessage = `${POI_MAP[correctedPOI]} was already claimed by ${CLAIMS[correctedPOI].player} ${timeSinceClaim} minutes ago.`;
+            console.log(`🚫 POI Already Claimed: ${responseMessage}`);
+            await sendServerMessage(responseMessage);
             return res.sendStatus(204);
         }
 
@@ -167,22 +172,6 @@ app.post("/webhook", async (req, res) => {
         let claimMessage = `${playerName} claimed ${POI_MAP[correctedPOI]}.`;
         console.log(`✅ Claim Accepted: ${claimMessage}`);
         await sendServerMessage(claimMessage);
-
-        return res.sendStatus(204);
-    }
-
-    // 🟢 "Unclaim POI" command
-    const unclaimMatch = messageContent.match(UNCLAIM_REGEX);
-    if (unclaimMatch) {
-        let detectedPOI = unclaimMatch[1].trim().toLowerCase();
-        let correctedPOI = ABBREVIATED_TO_FULL_POI[detectedPOI];
-
-        if (!correctedPOI || !CLAIMS[correctedPOI] || CLAIMS[correctedPOI].player !== playerName) {
-            return res.sendStatus(204);
-        }
-
-        delete CLAIMS[correctedPOI];
-        await sendServerMessage(`${playerName} unclaimed ${POI_MAP[correctedPOI]}.`);
         return res.sendStatus(204);
     }
 
