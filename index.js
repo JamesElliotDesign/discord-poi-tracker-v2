@@ -15,13 +15,10 @@ const CLAIMS = {}; // Stores active POI claims
 const CLAIM_REGEX = /\bclaim\s+([A-Za-z0-9_ -]+)\b/i;
 const CHECK_CLAIMS_REGEX = /\bcheck claims\b/i;
 const CHECK_POI_REGEX = /\bcheck\s+([A-Za-z0-9_ -]+)\b/i;
+const UNCLAIM_REGEX = /\bunclaim\s+([A-Za-z0-9_ -]+)\b/i; // New unclaim regex
 
 // 🛑 POIs that should NOT be listed in "Check Claims"
-const EXCLUDED_POIS = [
-    "Heli Crash (Active Now)",
-    "Hunter Camp (Active Now)",
-    "Airdrop (Active Now)"
-];
+const EXCLUDED_POIS = ["Heli Crash (Active Now)", "Hunter Camp (Active Now)", "Airdrop (Active Now)", "Banker (Quest)", "Knight (Quest)"];
 
 // 🟢 POI LIST with Abbreviations
 const POI_MAP = {
@@ -118,20 +115,14 @@ app.post("/webhook", async (req, res) => {
         return res.sendStatus(204);
     }
 
-    // 🟢 "Check POI" command (Fixing Abbreviations & Typos)
+    // 🟢 "Check POI" command
     const checkMatch = messageContent.match(CHECK_POI_REGEX);
     if (checkMatch) {
         let detectedPOI = checkMatch[1].trim().toLowerCase();
-
-        // 🔍 Fuzzy match for POI abbreviation
-        let correctedPOI = ABBREVIATED_TO_FULL_POI[detectedPOI];
-
-        if (!correctedPOI) {
-            let bestMatch = stringSimilarity.findBestMatch(detectedPOI, POI_ABBREVIATIONS_LOWER);
-            if (bestMatch.bestMatch.rating > 0.5) {
-                correctedPOI = Object.keys(POI_MAP).find(key => POI_MAP[key].toLowerCase() === bestMatch.bestMatch.target);
-            }
-        }
+        let bestMatch = stringSimilarity.findBestMatch(detectedPOI, POI_ABBREVIATIONS_LOWER);
+        let correctedPOI = bestMatch.bestMatch.rating > 0.4
+            ? Object.keys(POI_MAP).find(key => POI_MAP[key].toLowerCase() === bestMatch.bestMatch.target)
+            : null;
 
         if (!correctedPOI) {
             console.log(`❌ Unknown POI Check: ${playerName} attempted to check '${detectedPOI}'`);
@@ -151,36 +142,30 @@ app.post("/webhook", async (req, res) => {
         return res.sendStatus(204);
     }
 
-    // 🟢 "Claim POI" command
-    const claimMatch = messageContent.match(CLAIM_REGEX);
-    if (claimMatch) {
-        let detectedPOI = claimMatch[1].trim().toLowerCase();
-        let correctedPOI = ABBREVIATED_TO_FULL_POI[detectedPOI];
+    // 🟢 "Unclaim POI" command
+    const unclaimMatch = messageContent.match(UNCLAIM_REGEX);
+    if (unclaimMatch) {
+        let detectedPOI = unclaimMatch[1].trim().toLowerCase();
+        let bestMatch = stringSimilarity.findBestMatch(detectedPOI, POI_ABBREVIATIONS_LOWER);
+        let correctedPOI = bestMatch.bestMatch.rating > 0.4
+            ? Object.keys(POI_MAP).find(key => POI_MAP[key].toLowerCase() === bestMatch.bestMatch.target)
+            : null;
 
-        if (!correctedPOI) {
-            let bestMatch = stringSimilarity.findBestMatch(detectedPOI, POI_ABBREVIATIONS_LOWER);
-            if (bestMatch.bestMatch.rating > 0.5) {
-                correctedPOI = Object.keys(POI_MAP).find(key => POI_MAP[key].toLowerCase() === bestMatch.bestMatch.target);
-            }
-        }
-
-        if (!correctedPOI) {
-            console.log(`❌ Invalid Claim: ${playerName} attempted to claim an unknown POI: ${detectedPOI}`);
-            await sendServerMessage(`Invalid POI: ${detectedPOI}. Try 'check claims' to see available POIs.`);
+        if (!correctedPOI || !CLAIMS[correctedPOI]) {
+            console.log(`❌ Unclaim Failed: ${playerName} tried to unclaim '${detectedPOI}', but it's not claimed.`);
+            await sendServerMessage(`${POI_MAP[correctedPOI] || detectedPOI} is already available.`);
             return res.sendStatus(204);
         }
 
-        if (CLAIMS[correctedPOI]) {
-            let timeSinceClaim = Math.floor((Date.now() - CLAIMS[correctedPOI].timestamp) / 60000);
-            let responseMessage = `${CLAIMS[correctedPOI].player} already claimed ${POI_MAP[correctedPOI]} ${timeSinceClaim} minutes ago.`;
-            console.log(`🚫 POI Already Claimed: ${responseMessage}`);
-            await sendServerMessage(responseMessage);
-        } else {
-            CLAIMS[correctedPOI] = { player: playerName, timestamp: Date.now() };
-            let claimMessage = `${playerName} claimed ${POI_MAP[correctedPOI]}.`;
-            console.log(`✅ Claim Accepted: ${claimMessage}`);
-            await sendServerMessage(claimMessage);
+        if (CLAIMS[correctedPOI].player !== playerName) {
+            console.log(`❌ Unclaim Denied: ${playerName} tried to unclaim ${POI_MAP[correctedPOI]}, but they didn't claim it.`);
+            await sendServerMessage(`You can't unclaim ${POI_MAP[correctedPOI]} because you didn't claim it.`);
+            return res.sendStatus(204);
         }
+
+        delete CLAIMS[correctedPOI];
+        console.log(`✅ POI Unclaimed: ${playerName} unclaimed ${POI_MAP[correctedPOI]}`);
+        await sendServerMessage(`${playerName} unclaimed ${POI_MAP[correctedPOI]}.`);
         return res.sendStatus(204);
     }
 
