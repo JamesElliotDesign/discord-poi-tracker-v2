@@ -127,9 +127,23 @@ app.post("/webhook", async (req, res) => {
     const checkMatch = messageContent.match(CHECK_POI_REGEX);
     if (checkMatch) {
         let detectedPOI = checkMatch[1].trim().toLowerCase();
-        let bestMatch = stringSimilarity.findBestMatch(detectedPOI, [...Object.keys(POI_MAP).map(key => key.toLowerCase()), ...POI_ABBREVIATIONS_LOWER]);
-        if (bestMatch.bestMatch.rating > 0.5) {
-            correctedPOI = Object.keys(POI_MAP).find(key => key.toLowerCase() === bestMatch.bestMatch.target) || ABBREVIATED_TO_FULL_POI[bestMatch.bestMatch.target];
+
+        let correctedPOI = Object.keys(POI_MAP).find(key => 
+            key.toLowerCase() === detectedPOI || POI_MAP[key].toLowerCase() === detectedPOI
+        ) || EXCLUDED_POIS.find(poi => poi.toLowerCase() === detectedPOI);
+
+        // 🔎 Try fuzzy matching if no exact match (Threshold: 0.8)
+        if (!correctedPOI) {
+            let bestMatch = stringSimilarity.findBestMatch(
+                detectedPOI,
+                [...Object.keys(POI_MAP), ...Object.values(POI_MAP), ...EXCLUDED_POIS].map(poi => poi.toLowerCase())
+            );
+
+            if (bestMatch.bestMatch.rating >= 0.8) {
+                correctedPOI = [...Object.keys(POI_MAP), ...Object.values(POI_MAP), ...EXCLUDED_POIS].find(
+                    key => key.toLowerCase() === bestMatch.bestMatch.target
+                );
+            }
         }
 
         if (!correctedPOI) {
@@ -138,14 +152,16 @@ app.post("/webhook", async (req, res) => {
             return res.sendStatus(204);
         }
 
-        if (CLAIMS[correctedPOI]) {
-            let timeSinceClaim = Math.floor((Date.now() - CLAIMS[correctedPOI].timestamp) / 60000);
-            let claimMessage = `${POI_MAP[correctedPOI]} is claimed by ${CLAIMS[correctedPOI].player} ${timeSinceClaim} minutes ago.`;
+        let storedPOI = Object.keys(POI_MAP).find(key => POI_MAP[key] === correctedPOI) || correctedPOI;
+
+        if (CLAIMS[storedPOI]) {
+            let timeSinceClaim = Math.floor((Date.now() - CLAIMS[storedPOI].timestamp) / 60000);
+            let claimMessage = `${storedPOI} is claimed by ${CLAIMS[storedPOI].player} ${timeSinceClaim} minutes ago.`;
             console.log(`🔍 POI Check: ${claimMessage}`);
             await sendServerMessage(claimMessage);
         } else {
-            console.log(`🔍 POI Check: ${POI_MAP[correctedPOI]} is available.`);
-            await sendServerMessage(`${POI_MAP[correctedPOI]} is available to claim!`);
+            console.log(`🔍 POI Check: ${storedPOI} is available.`);
+            await sendServerMessage(`${storedPOI} is available to claim!`);
         }
         return res.sendStatus(204);
     }
@@ -156,19 +172,19 @@ app.post("/webhook", async (req, res) => {
         let detectedPOI = claimMatch[1].trim().toLowerCase();
 
         // 🔍 Find exact match in POI_MAP or EXCLUDED_POIS
-        let correctedPOI = Object.entries(POI_MAP).find(([full, short]) => 
-            short.toLowerCase() === detectedPOI || full.toLowerCase() === detectedPOI
-        )?.[0] || EXCLUDED_POIS.find(poi => poi.toLowerCase() === detectedPOI);
+        let correctedPOI = Object.keys(POI_MAP).find(key => 
+            key.toLowerCase() === detectedPOI || POI_MAP[key].toLowerCase() === detectedPOI
+        ) || EXCLUDED_POIS.find(poi => poi.toLowerCase() === detectedPOI);
 
         // 🔎 If no exact match, try fuzzy matching (Threshold: 0.8 or higher)
         if (!correctedPOI) {
             let bestMatch = stringSimilarity.findBestMatch(
                 detectedPOI,
-                [...Object.keys(POI_MAP), ...EXCLUDED_POIS].map(poi => poi.toLowerCase())
+                [...Object.keys(POI_MAP), ...Object.values(POI_MAP), ...EXCLUDED_POIS].map(poi => poi.toLowerCase())
             );
 
             if (bestMatch.bestMatch.rating >= 0.8) {
-                correctedPOI = [...Object.keys(POI_MAP), ...EXCLUDED_POIS].find(
+                correctedPOI = [...Object.keys(POI_MAP), ...Object.values(POI_MAP), ...EXCLUDED_POIS].find(
                     key => key.toLowerCase() === bestMatch.bestMatch.target
                 );
             }
@@ -181,18 +197,21 @@ app.post("/webhook", async (req, res) => {
             return res.sendStatus(204);
         }
 
+        // 🛠 Ensure we use the full name from POI_MAP or EXCLUDED_POIS
+        let storedPOI = Object.keys(POI_MAP).find(key => POI_MAP[key] === correctedPOI) || correctedPOI;
+
         // 🚫 Check if the POI is already claimed
-        if (CLAIMS[correctedPOI]) {
-            let timeSinceClaim = Math.floor((Date.now() - CLAIMS[correctedPOI].timestamp) / 60000);
-            let responseMessage = `${correctedPOI} was already claimed by ${CLAIMS[correctedPOI].player} ${timeSinceClaim} minutes ago.`;
+        if (CLAIMS[storedPOI]) {
+            let timeSinceClaim = Math.floor((Date.now() - CLAIMS[storedPOI].timestamp) / 60000);
+            let responseMessage = `${storedPOI} was already claimed by ${CLAIMS[storedPOI].player} ${timeSinceClaim} minutes ago.`;
             console.log(`🚫 POI Already Claimed: ${responseMessage}`);
             await sendServerMessage(responseMessage);
             return res.sendStatus(204);
         }
 
         // ✅ Claim the POI (Store using FULL POI name)
-        CLAIMS[correctedPOI] = { player: playerName, timestamp: Date.now() };
-        let claimMessage = `${playerName} claimed ${correctedPOI}.`;
+        CLAIMS[storedPOI] = { player: playerName, timestamp: Date.now() };
+        let claimMessage = `${playerName} claimed ${storedPOI}.`;
         console.log(`✅ Claim Accepted: ${claimMessage}`);
         await sendServerMessage(claimMessage);
         return res.sendStatus(204);
