@@ -159,9 +159,11 @@ app.post("/webhook", async (req, res) => {
                 return res.sendStatus(204);
             }
 
-            let status = CLAIMS[correctedPOI] 
-                ? `${correctedPOI} is claimed by ${CLAIMS[correctedPOI].player}.`
-                : `${correctedPOI} is available to claim!`;
+            await sendServerMessage(
+                CLAIMS[correctedPOI] 
+                    ? `${correctedPOI} is claimed by ${CLAIMS[correctedPOI].player}.` 
+                    : `${correctedPOI} is available to claim!`
+            );            
 
             await sendServerMessage(status);
             return res.sendStatus(204);
@@ -173,7 +175,10 @@ app.post("/webhook", async (req, res) => {
            let correctedPOI = findMatchingPOI(claimMatch[1]);
 
            if (!correctedPOI || CLAIMS[correctedPOI]) {
-               await sendServerMessage(`Invalid or already claimed POI: ${claimMatch[1]}`);
+            await sendServerMessage(CLAIMS[correctedPOI] 
+                ? `${correctedPOI} is already claimed by ${CLAIMS[correctedPOI].player}.`
+                : `Invalid POI: ${claimMatch[1]}. Try 'check claims' to see available POIs.`
+            );            
                return res.sendStatus(204);
            }
 
@@ -188,7 +193,10 @@ app.post("/webhook", async (req, res) => {
            let correctedPOI = findMatchingPOI(unclaimMatch[1]);
 
            if (!correctedPOI || !CLAIMS[correctedPOI]) {
-               await sendServerMessage(`${correctedPOI || unclaimMatch[1]} is not currently claimed.`);
+            await sendServerMessage(correctedPOI 
+                ? `${correctedPOI} is not currently claimed.` 
+                : `Invalid POI: ${unclaimMatch[1]}. Try 'check claims' to see available POIs.`
+            );            
                return res.sendStatus(204);
            }
 
