@@ -151,7 +151,7 @@ app.post("/webhook", async (req, res) => {
     // 🟢 "Check POI" command
     const checkMatch = messageContent.match(CHECK_POI_REGEX);
     if (checkMatch) {
-        let detectedPOI = checkMatch[1].trim().toLowerCase();
+        let detectedPOI = checkMatch[1].trim().toLowerCase().replace(/\s+/g, " ").replace(/[^a-z0-9 ]/gi, "");
 
         let correctedPOI = Object.keys(POI_MAP).find(key => 
             key.toLowerCase() === detectedPOI || POI_MAP[key].toLowerCase() === detectedPOI
