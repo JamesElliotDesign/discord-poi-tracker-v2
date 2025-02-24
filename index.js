@@ -23,7 +23,9 @@ const CHECK_POI_REGEX = /\bcheck\s+([A-Za-z0-9_ -]+)\b/i;
 const EXCLUDED_POIS = [
     "Heli Crash (Active Now)",
     "Hunter Camp (Active Now)",
-    "Airdrop (Active Now)"
+    "Airdrop (Active Now)",
+    "Knight (Quest)",
+    "Banker (Quest)"
 ];
 
 // 🟢 POI LIST with Abbreviations
