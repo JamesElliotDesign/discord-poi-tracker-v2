@@ -20,13 +20,7 @@ const CHECK_CLAIMS_REGEX = /\bcheck claims\b/i;
 const CHECK_POI_REGEX = /\bcheck\s+([A-Za-z0-9_ -]+)\b/i;
 
 // 🛑 POIs that should NOT be listed in "Check Claims"
-const EXCLUDED_POIS = [
-    "Heli Crash (Active Now)",
-    "Hunter Camp (Active Now)",
-    "Airdrop (Active Now)",
-    "Knight (Quest)",
-    "Banker (Quest)"
-];
+const EXCLUDED_POIS = [];
 
 // 🟢 POI LIST with Abbreviations
 const POI_MAP = {
@@ -45,7 +39,12 @@ const POI_MAP = {
     "Kamensk Heli Depot T3": "Kamensk",
     "Tisy Power Plant T4": "Tisy",
     "Krasno Warehouse T2": "Krasno",
-    "Balota Warehouse T1": "Balota"
+    "Balota Warehouse T1": "Balota",
+    "Heli Crash (Active Now)" : "Heli",
+    "Hunter Camp (Active Now)" : "Hunter",
+    "Airdrop (Active Now)" : "Airdrop",
+    "Knight (Quest)" : "Knight",
+    "Banker (Quest)" : "Banker"
 };
 
 // 🔄 Reverse Lookup Map (Abbreviated → Full POI Name)
