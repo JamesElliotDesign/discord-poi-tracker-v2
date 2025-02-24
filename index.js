@@ -12,6 +12,7 @@ const app = express();
 app.use(express.json());
 
 const CLAIMS = {}; // Stores active POI claims
+const CLAIM_TIMEOUT = 60 * 60 * 1000; // 60 minutes in milliseconds
 
 // 🟢 Command Regex
 const CLAIM_REGEX = /\bclaim\s+([A-Za-z0-9_ -]+)\b/i;
@@ -78,6 +79,28 @@ function validateSignature(req) {
 
     return true;
 }
+
+/**
+ * Automatically release expired POIs after 60 minutes
+ */
+function releaseExpiredPOIs() {
+    const now = Date.now();
+
+    Object.keys(CLAIMS).forEach(poi => {
+        if (CLAIMS[poi] && CLAIMS[poi].timestamp && now - CLAIMS[poi].timestamp >= CLAIM_TIMEOUT) {
+            console.log(`⏳ Auto-Releasing POI: ${poi} (Claim expired)`);
+            delete CLAIMS[poi];
+            sendServerMessage(`The claim on ${poi} has expired and is now available.`)
+                .then(() => console.log(`✅ Message sent for expired claim: ${poi}`))
+                .catch(err => console.error(`❌ Failed to send message for expired claim: ${poi}`, err));
+
+            return; // Prevents further iterations on a deleted claim
+        }
+    });
+}
+
+// Run the auto-release check **every minute**
+setInterval(releaseExpiredPOIs, 60 * 1000);
 
 /**
  * Webhook endpoint for CFTools events
