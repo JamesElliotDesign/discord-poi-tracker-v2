@@ -181,40 +181,43 @@ app.post("/webhook", async (req, res) => {
         }
 
     // 🟢 "Claim POI" command
-    const claimMatch = messageContent.match(CLAIM_REGEX);
-    if (claimMatch) {
-        let detectedPOI = claimMatch[1].trim().toLowerCase();
-        let correctedPOI = ABBREVIATED_TO_FULL_POI[detectedPOI] || POI_MAP[detectedPOI];
+        const claimMatch = messageContent.match(CLAIM_REGEX);
+        if (claimMatch) {
+            let detectedPOI = claimMatch[1].trim().toLowerCase();
 
-        let bestMatch = stringSimilarity.findBestMatch(detectedPOI, [...Object.keys(POI_MAP).map(key => key.toLowerCase()), ...POI_ABBREVIATIONS_LOWER]);
-        if (bestMatch.bestMatch.rating > 0.5) {
-            correctedPOI = Object.keys(POI_MAP).find(key => key.toLowerCase() === bestMatch.bestMatch.target) || ABBREVIATED_TO_FULL_POI[bestMatch.bestMatch.target];
-        }
+            // 🔍 Try to find a correct match (From POI_MAP or EXCLUDED_POIS)
+            let bestMatch = stringSimilarity.findBestMatch(
+                detectedPOI,
+                [...Object.keys(POI_MAP).map(key => key.toLowerCase()), ...EXCLUDED_POIS.map(poi => poi.toLowerCase()), ...POI_ABBREVIATIONS_LOWER]
+            );
 
-        if (!correctedPOI) {
-            correctedPOI = detectedPOI; // Allow claiming even if it's not in POI_MAP
-        }
+            let correctedPOI = Object.keys(POI_MAP).find(key => key.toLowerCase() === bestMatch.bestMatch.target) ||
+                            POI_ABBREVIATIONS_LOWER.find(key => key === bestMatch.bestMatch.target) ||
+                            EXCLUDED_POIS.find(poi => poi.toLowerCase() === bestMatch.bestMatch.target);
 
-        if (!correctedPOI) {
-            console.log(`❌ Invalid Claim: ${playerName} attempted to claim an unknown POI: ${detectedPOI}`);
-            await sendServerMessage(`Invalid POI: ${detectedPOI}. Try 'check claims' to see available POIs.`);
+            // ❌ If the POI is invalid (Not in POI_MAP or EXCLUDED_POIS)
+            if (!correctedPOI) {
+                console.log(`❌ Invalid Claim: ${playerName} attempted to claim an unknown POI: ${detectedPOI}`);
+                await sendServerMessage(`Invalid POI: ${detectedPOI}. Try 'check claims' to see available POIs.`);
+                return res.sendStatus(204);
+            }
+
+            // 🚫 Check if the POI is already claimed
+            if (CLAIMS[correctedPOI]) {
+                let timeSinceClaim = Math.floor((Date.now() - CLAIMS[correctedPOI].timestamp) / 60000);
+                let responseMessage = `${correctedPOI} was already claimed by ${CLAIMS[correctedPOI].player} ${timeSinceClaim} minutes ago.`;
+                console.log(`🚫 POI Already Claimed: ${responseMessage}`);
+                await sendServerMessage(responseMessage);
+                return res.sendStatus(204);
+            }
+
+            // ✅ Claim the POI
+            CLAIMS[correctedPOI] = { player: playerName, timestamp: Date.now() };
+            let claimMessage = `${playerName} claimed ${correctedPOI}.`;
+            console.log(`✅ Claim Accepted: ${claimMessage}`);
+            await sendServerMessage(claimMessage);
             return res.sendStatus(204);
-        }        
-
-        if (CLAIMS[correctedPOI]) {
-            let timeSinceClaim = Math.floor((Date.now() - CLAIMS[correctedPOI].timestamp) / 60000);
-            let responseMessage = `${POI_MAP[correctedPOI]} was already claimed by ${CLAIMS[correctedPOI].player} ${timeSinceClaim} minutes ago.`;
-            console.log(`🚫 POI Already Claimed: ${responseMessage}`);
-            await sendServerMessage(responseMessage);
-            return res.sendStatus(204);
         }
-
-        CLAIMS[correctedPOI] = { player: playerName, timestamp: Date.now() };
-        let claimMessage = `${playerName} claimed ${POI_MAP[correctedPOI]}.`;
-        console.log(`✅ Claim Accepted: ${claimMessage}`);
-        await sendServerMessage(claimMessage);
-        return res.sendStatus(204);
-    }
 
     res.sendStatus(204);
 });
