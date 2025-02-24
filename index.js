@@ -102,7 +102,7 @@ function findMatchingPOI(input) {
         }
     }
 
-    return correctedPOI;
+    return correctedPOI || null;
 }
 
 /**
@@ -163,10 +163,9 @@ app.post("/webhook", async (req, res) => {
                 CLAIMS[correctedPOI] 
                     ? `${correctedPOI} is claimed by ${CLAIMS[correctedPOI].player}.` 
                     : `${correctedPOI} is available to claim!`
-            );            
-
-            await sendServerMessage(status);
+            );
             return res.sendStatus(204);
+            
         }
 
        // 🟢 "Claim POI"
