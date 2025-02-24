@@ -185,17 +185,25 @@ app.post("/webhook", async (req, res) => {
         if (claimMatch) {
             let detectedPOI = claimMatch[1].trim().toLowerCase();
 
-            // 🔍 Try to find a correct match (From POI_MAP or EXCLUDED_POIS)
-            let bestMatch = stringSimilarity.findBestMatch(
-                detectedPOI,
-                [...Object.keys(POI_MAP).map(key => key.toLowerCase()), ...EXCLUDED_POIS.map(poi => poi.toLowerCase()), ...POI_ABBREVIATIONS_LOWER]
-            );
+            // 🔍 Try to find an exact match first
+            let correctedPOI = Object.keys(POI_MAP).find(key => key.toLowerCase() === detectedPOI) ||
+                            EXCLUDED_POIS.find(poi => poi.toLowerCase() === detectedPOI);
 
-            let correctedPOI = Object.keys(POI_MAP).find(key => key.toLowerCase() === bestMatch.bestMatch.target) ||
-                            POI_ABBREVIATIONS_LOWER.find(key => key === bestMatch.bestMatch.target) ||
-                            EXCLUDED_POIS.find(poi => poi.toLowerCase() === bestMatch.bestMatch.target);
+            // 🔎 If no exact match, try fuzzy matching (Threshold: 0.8 or higher)
+            if (!correctedPOI) {
+                let bestMatch = stringSimilarity.findBestMatch(
+                    detectedPOI,
+                    [...Object.keys(POI_MAP).map(key => key.toLowerCase()), ...EXCLUDED_POIS.map(poi => poi.toLowerCase()), ...POI_ABBREVIATIONS_LOWER]
+                );
 
-            // ❌ If the POI is invalid (Not in POI_MAP or EXCLUDED_POIS)
+                if (bestMatch.bestMatch.rating >= 0.8) { // 🔥 Only accept highly similar matches
+                    correctedPOI = Object.keys(POI_MAP).find(key => key.toLowerCase() === bestMatch.bestMatch.target) ||
+                                EXCLUDED_POIS.find(poi => poi.toLowerCase() === bestMatch.bestMatch.target) ||
+                                POI_ABBREVIATIONS_LOWER.find(key => key === bestMatch.bestMatch.target);
+                }
+            }
+
+            // ❌ If no valid match, reject the claim
             if (!correctedPOI) {
                 console.log(`❌ Invalid Claim: ${playerName} attempted to claim an unknown POI: ${detectedPOI}`);
                 await sendServerMessage(`Invalid POI: ${detectedPOI}. Try 'check claims' to see available POIs.`);
