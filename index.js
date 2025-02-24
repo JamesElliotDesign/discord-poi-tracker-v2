@@ -50,7 +50,10 @@ const POI_MAP = {
 
 // 🔄 Reverse Lookup Map (Abbreviated → Full POI Name)
 const ABBREVIATED_TO_FULL_POI = Object.fromEntries(
-    Object.entries(POI_MAP).map(([full, short]) => [short.toLowerCase(), full])
+    Object.entries(POI_MAP).flatMap(([full, short]) => [
+        [short.toLowerCase(), full], 
+        [full.toLowerCase(), full]  // Ensures full names also map
+    ])
 );
 
 // 🔄 Lowercase POI List for Fuzzy Matching
@@ -152,21 +155,19 @@ app.post("/webhook", async (req, res) => {
 
         let correctedPOI = Object.keys(POI_MAP).find(key => 
             key.toLowerCase() === detectedPOI || POI_MAP[key].toLowerCase() === detectedPOI
-        ) || EXCLUDED_POIS.find(poi => poi.toLowerCase() === detectedPOI);
-
-        // 🔎 Try fuzzy matching if no exact match (Threshold: 0.8)
+        ) || ABBREVIATED_TO_FULL_POI[detectedPOI];
+        
+        // 🔎 If no exact match, try fuzzy matching (Lower threshold to 0.6)
         if (!correctedPOI) {
             let bestMatch = stringSimilarity.findBestMatch(
                 detectedPOI,
-                [...Object.keys(POI_MAP), ...Object.values(POI_MAP), ...EXCLUDED_POIS].map(poi => poi.toLowerCase())
+                [...Object.keys(POI_MAP), ...Object.values(POI_MAP), ...Object.keys(ABBREVIATED_TO_FULL_POI)]
             );
-
-            if (bestMatch.bestMatch.rating >= 0.8) {
-                correctedPOI = [...Object.keys(POI_MAP), ...Object.values(POI_MAP), ...EXCLUDED_POIS].find(
-                    key => key.toLowerCase() === bestMatch.bestMatch.target
-                );
+        
+            if (bestMatch.bestMatch.rating >= 0.6) {  // Lowered threshold
+                correctedPOI = ABBREVIATED_TO_FULL_POI[bestMatch.bestMatch.target] || bestMatch.bestMatch.target;
             }
-        }
+        }        
 
         if (!correctedPOI) {
             console.log(`❌ Unknown POI Check: ${playerName} attempted to check '${detectedPOI}'`);
@@ -196,21 +197,19 @@ app.post("/webhook", async (req, res) => {
         // 🔍 Find exact match in POI_MAP or EXCLUDED_POIS
         let correctedPOI = Object.keys(POI_MAP).find(key => 
             key.toLowerCase() === detectedPOI || POI_MAP[key].toLowerCase() === detectedPOI
-        ) || EXCLUDED_POIS.find(poi => poi.toLowerCase() === detectedPOI);
-
-        // 🔎 If no exact match, try fuzzy matching (Threshold: 0.8 or higher)
+        ) || ABBREVIATED_TO_FULL_POI[detectedPOI];
+        
+        // 🔎 If no exact match, try fuzzy matching (Lower threshold to 0.6)
         if (!correctedPOI) {
             let bestMatch = stringSimilarity.findBestMatch(
                 detectedPOI,
-                [...Object.keys(POI_MAP), ...Object.values(POI_MAP), ...EXCLUDED_POIS].map(poi => poi.toLowerCase())
+                [...Object.keys(POI_MAP), ...Object.values(POI_MAP), ...Object.keys(ABBREVIATED_TO_FULL_POI)]
             );
-
-            if (bestMatch.bestMatch.rating >= 0.8) {
-                correctedPOI = [...Object.keys(POI_MAP), ...Object.values(POI_MAP), ...EXCLUDED_POIS].find(
-                    key => key.toLowerCase() === bestMatch.bestMatch.target
-                );
+        
+            if (bestMatch.bestMatch.rating >= 0.6) {  // Lowered from 0.8 to 0.6
+                correctedPOI = ABBREVIATED_TO_FULL_POI[bestMatch.bestMatch.target] || bestMatch.bestMatch.target;
             }
-        }
+        }        
 
         // ❌ If no valid match, reject the claim
         if (!correctedPOI) {
