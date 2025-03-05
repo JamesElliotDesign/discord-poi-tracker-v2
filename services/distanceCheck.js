@@ -65,7 +65,9 @@ async function getPlayerPosition(playerName) {
         });
 
         const players = response.data.players || [];
-        const player = players.find(p => p.name.toLowerCase() === playerName.toLowerCase());
+        const player = players.find(p => 
+            p.gamedata && p.gamedata.player_name.toLowerCase() === playerName.toLowerCase()
+        );        
 
         if (!player) {
             console.log(`❌ Player '${playerName}' not found in API response.`);
