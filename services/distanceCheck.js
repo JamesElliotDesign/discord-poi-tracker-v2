@@ -64,8 +64,6 @@ async function getPlayerPosition(playerName) {
             },
         });
 
-        console.log("🔍 Raw API Response:", JSON.stringify(response.data, null, 2));
-
         const players = response.data.players || [];
         const player = players.find(p => p.name.toLowerCase() === playerName.toLowerCase());
 
@@ -74,13 +72,14 @@ async function getPlayerPosition(playerName) {
             return null;
         }
 
-        if (!player.position) {
-            console.log(`❌ Player '${playerName}' found, but position is missing.`);
+        if (!player.live || !player.live.position || !player.live.position.latest) {
+            console.log(`❌ Player '${playerName}' found, but no valid latest position data.`);
             console.log("🔍 Full Player Data:", JSON.stringify(player, null, 2));
             return null;
         }
+        
+        return player.live.position.latest; // ✅ Fetch latest position correctly
 
-        return player.position; // ✅ Return the position if found
     } catch (error) {
         console.error("❌ Failed to fetch player position:", error.response?.data || error.message);
         return null;
