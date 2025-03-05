@@ -66,7 +66,7 @@ async function getPlayerPosition(playerName) {
 
         console.log("🔍 Raw API Response:", JSON.stringify(response.data, null, 2));
 
-        const players = response.data.players || [];
+        const players = Array.isArray(response.data) ? response.data : [];
         console.log("🔍 Players Retrieved from API:", players.map(p => p.gamedata.player_name)); // Debug log
         const player = players.find(p => {
             if (!p.gamedata || !p.gamedata.player_name) return false; // Ensure data exists
