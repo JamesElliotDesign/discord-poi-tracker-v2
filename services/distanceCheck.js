@@ -70,9 +70,15 @@ async function getPlayerPosition(playerName) {
         console.log("🔍 Players Retrieved from API:", players.map(p => p.gamedata.player_name)); // Debug log
         const player = players.find(p => {
             if (!p.gamedata || !p.gamedata.player_name) return false; // Ensure data exists
-            console.log(`🔍 Checking Player: '${p.gamedata.player_name}' vs '${playerName}'`);
-            return p.gamedata.player_name.toLowerCase() === playerName.toLowerCase();
-        });                
+        
+            // Trim and normalize both names before comparing
+            const apiName = p.gamedata.player_name.trim().toLowerCase();
+            const inputName = playerName.trim().toLowerCase();
+        
+            console.log(`🔍 Checking Player: '${apiName}' vs '${inputName}'`);
+        
+            return apiName === inputName;
+        });                     
 
         if (!player) {
             console.log(`❌ Player '${playerName}' not found in API response.`);
