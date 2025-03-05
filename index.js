@@ -60,6 +60,7 @@ const PARTIAL_POI_MAP = {
     "zub": "Zub Castle Military T3",
     "oil rig": "Svetloyarsk Oil Rig T4",
     "balota": "Balota Warehouse T1",
+    "bunker": "Sinystok Bunker T5",
     "heli": "Heli Crash (Active Now)",
     "airdrop": "Airdrop (Active Now)",
     "hunter": "Hunter Camp (Active Now)",

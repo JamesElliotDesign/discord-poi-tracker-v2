@@ -105,13 +105,19 @@ async function getPlayerPosition(playerName) {
  * Calculate Distance between two positions
  */
 function calculateDistance(pos1, pos2) {
-    const [x1, , z1] = pos1;
-    const [x2, , z2] = pos2;
+    const x1 = pos1[0];
+    const z1 = pos1[2]; // ✅ Ensure we're using Z for the 2D map
+
+    const x2 = pos2[0];
+    const z2 = pos2[2];
 
     const dx = x1 - x2;
     const dz = z1 - z2;
 
-    return Math.sqrt(dx * dx + dz * dz); // Ignore Y axis for 2D distance check
+    const distance = Math.sqrt(dx * dx + dz * dz);
+    console.log(`📏 Calculated Distance: ${distance.toFixed(2)}m (Ignoring Y-axis)`);
+    
+    return distance;
 }
 
 /**
