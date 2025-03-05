@@ -64,11 +64,23 @@ async function getPlayerPosition(playerName) {
             },
         });
 
+        console.log("🔍 Raw API Response:", JSON.stringify(response.data, null, 2));
+
         const players = response.data.players || [];
         const player = players.find(p => p.name.toLowerCase() === playerName.toLowerCase());
 
-        if (!player || !player.position) return null; // No valid position found
-        return player.position; // [x, y, z]
+        if (!player) {
+            console.log(`❌ Player '${playerName}' not found in API response.`);
+            return null;
+        }
+
+        if (!player.position) {
+            console.log(`❌ Player '${playerName}' found, but position is missing.`);
+            console.log("🔍 Full Player Data:", JSON.stringify(player, null, 2));
+            return null;
+        }
+
+        return player.position; // ✅ Return the position if found
     } catch (error) {
         console.error("❌ Failed to fetch player position:", error.response?.data || error.message);
         return null;
