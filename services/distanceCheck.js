@@ -64,10 +64,15 @@ async function getPlayerPosition(playerName) {
             },
         });
 
+        console.log("🔍 Raw API Response:", JSON.stringify(response.data, null, 2));
+
         const players = response.data.players || [];
-        const player = players.find(p => 
-            p.gamedata && p.gamedata.player_name.toLowerCase() === playerName.toLowerCase()
-        );        
+        console.log("🔍 Players Retrieved from API:", players.map(p => p.gamedata.player_name)); // Debug log
+        const player = players.find(p => {
+            if (!p.gamedata || !p.gamedata.player_name) return false; // Ensure data exists
+            console.log(`🔍 Checking Player: '${p.gamedata.player_name}' vs '${playerName}'`);
+            return p.gamedata.player_name.toLowerCase() === playerName.toLowerCase();
+        });                
 
         if (!player) {
             console.log(`❌ Player '${playerName}' not found in API response.`);
