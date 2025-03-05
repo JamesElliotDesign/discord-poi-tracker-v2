@@ -185,10 +185,18 @@ app.post("/webhook", async (req, res) => {
                 return res.sendStatus(204);
             }
 
+            const { isPlayerNearPOI } = require("./distanceCheck");
+
+            const checkResult = await isPlayerNearPOI(playerName, correctedPOI);
+            if (!checkResult.success) {
+                await sendServerMessage(checkResult.message);
+                return res.sendStatus(204);
+            }
+
             // ✅ Claim the POI
             CLAIMS[correctedPOI] = { player: playerName, timestamp: Date.now() };
             await sendServerMessage(`${playerName} claimed ${correctedPOI}.`);
-            return res.sendStatus(204);
+            
         }
 
        // 🟢 "Unclaim POI"
