@@ -125,6 +125,18 @@ setInterval(releaseExpiredPOIs, 60 * 1000);
 /**
  * Webhook handler
  */
+const processedMessages = new Map(); // Prevents duplicate processing
+
+// 🛑 Automatically clear processed messages after 10 seconds
+setInterval(() => {
+    const now = Date.now();
+    for (const [key, timestamp] of processedMessages.entries()) {
+        if (now - timestamp > 10000) {
+            processedMessages.delete(key);
+        }
+    }
+}, 5000);
+
 app.post("/webhook", async (req, res) => {
     try {
         if (!validateSignature(req)) return res.sendStatus(403);
@@ -137,6 +149,13 @@ app.post("/webhook", async (req, res) => {
         const playerName = player_name;
 
         console.log(`[Game Chat] ${playerName}: ${messageContent}`);
+        // ✅ Prevent duplicate processing
+        const messageKey = `${playerName}-${messageContent}`;
+        if (processedMessages.has(messageKey)) {
+            console.log(`🛑 Duplicate message detected, ignoring: ${messageKey}`);
+            return res.sendStatus(204);
+        }
+        processedMessages.set(messageKey, Date.now()); // Store message timestamp
 
         // 🟢 "Check Claims"
         if (CHECK_CLAIMS_REGEX.test(messageContent)) {
