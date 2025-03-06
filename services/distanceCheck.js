@@ -105,11 +105,12 @@ async function getPlayerPosition(playerName) {
  * Calculate Distance between two positions
  */
 function calculateDistance(pos1, pos2) {
+    // ✅ Fix coordinate order
     const x1 = pos1[0];
-    const z1 = pos1[2]; // ✅ Ensure we're using Z for the 2D map
+    const z1 = pos1[1]; // 🔹 Fix: Use [1] instead of [2]
 
     const x2 = pos2[0];
-    const z2 = pos2[2];
+    const z2 = pos2[1]; // 🔹 Fix: Use [1] instead of [2]
 
     const dx = x1 - x2;
     const dz = z1 - z2;
@@ -125,18 +126,18 @@ function calculateDistance(pos1, pos2) {
  */
 async function isPlayerNearPOI(playerName, poiName) {
     const playerPos = await getPlayerPosition(playerName);
-    if (!playerPos) return { success: false, message: `❌ Unable to retrieve position for ${playerName}.` };
+    if (!playerPos) return { success: false, message: `Unable to retrieve position for ${playerName}.` };
 
     const poiPos = POI_POSITIONS[poiName];
-    if (!poiPos) return { success: false, message: `❌ Unknown POI: ${poiName}.` };
+    if (!poiPos) return { success: false, message: `Unknown POI: ${poiName}.` };
 
     const distance = calculateDistance(playerPos, poiPos);
     console.log(`📍 ${playerName} Distance to ${poiName}: ${distance.toFixed(2)}m`);
 
     if (distance <= 500) {
-        return { success: true, message: `✅ ${playerName} is within range of ${poiName}.` };
+        return { success: true, message: `${playerName} is within range of ${poiName}.` };
     } else {
-        return { success: false, message: `❌ ${playerName} is too far from ${poiName} (${distance.toFixed(2)}m). Move closer to claim.` };
+        return { success: false, message: `${playerName} is too far from ${poiName} (${distance.toFixed(2)}m). Move closer to claim.` };
     }
 }
 
