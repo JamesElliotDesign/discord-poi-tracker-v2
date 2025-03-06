@@ -115,31 +115,33 @@ function calculateDistance(pos1, pos2) {
     return distance;
 }
 
-/**
+    /**
  * Validate if Player is within 500m of POI
  */
-    async function isPlayerNearPOI(playerName, poiName) {
-        console.log(`🚀 Checking distance for ${playerName} at ${poiName}`);
+async function isPlayerNearPOI(playerName, poiName) {
+    console.log(`🚀 Checking distance for ${playerName} at ${poiName}`);
 
-        const playerPos = await getPlayerPosition(playerName);
-        if (!playerPos) {
-            return { success: false, message: `Unable to retrieve position for ${playerName}.` };
-        }
+    const playerPos = await getPlayerPosition(playerName);
 
-        const poiPos = POI_POSITIONS[poiName];
-        if (!poiPos) {
-            return { success: false, message: `Unknown POI: ${poiName}.` };
-        }
-
-        const distance = calculateDistance(playerPos, poiPos);
-        console.log(`📍 ${playerName} Distance to ${poiName}: ${distance.toFixed(2)}m`);
-
-        if (distance > 500) {
-            return { success: false, message: `${playerName} is too far from ${poiName} (${distance.toFixed(2)}m). Move closer to claim.` };
-        }
-
-        // ✅ Only return success without sending multiple messages
-        return { success: true };
+    // 🛑 Fallback: If player position is null, allow the claim
+    if (!playerPos) {
+        console.log(`⚠️ WARNING: No position data for ${playerName}. Allowing claim by default.`);
+        return { success: true, message: `Unable to verify ${playerName}'s position, but allowing claim.` };
     }
+
+    const poiPos = POI_POSITIONS[poiName];
+    if (!poiPos) {
+        return { success: false, message: `Unknown POI: ${poiName}.` };
+    }
+
+    const distance = calculateDistance(playerPos, poiPos);
+    console.log(`📍 ${playerName} Distance to ${poiName}: ${distance.toFixed(2)}m`);
+
+    if (distance > 500) {
+        return { success: false, message: `${playerName} is too far from ${poiName} (${distance.toFixed(2)}m). Move closer to POI.` };
+    }
+
+    return { success: true };
+}
 
 module.exports = { isPlayerNearPOI };
