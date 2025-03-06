@@ -24,6 +24,15 @@ const CHECK_POI_REGEX = /\bcheck\s+([A-Za-z0-9_ -]+)\b/i;
 // 🛑 POIs that should NOT be listed in "Check Claims"
 const EXCLUDED_POIS = [];
 
+// 🛑 POIs that should BYPASS distance checks
+const DYNAMIC_POIS = new Set([
+    "Heli Crash (Active Now)",
+    "Hunter Camp (Active Now)",
+    "Airdrop (Active Now)",
+    "Knight (Quest)",
+    "Banker (Quest)"
+]);
+
 // 🟢 POI LIST with Abbreviations
 const POI_MAP = {
     "Sinystok Bunker T5": "Sinystok Bunker",
@@ -205,18 +214,21 @@ app.post("/webhook", async (req, res) => {
                 return res.sendStatus(204);
             }
 
-            const { isPlayerNearPOI } = require("./services/distanceCheck");
-
-            // ✅ Only send distance check response once
-            const checkResult = await isPlayerNearPOI(playerName, correctedPOI);
-            if (!checkResult.success) {
-                await sendServerMessage(checkResult.message);
-                return res.sendStatus(204);
+            // ✅ Bypass distance check for DYNAMIC_POIs
+            if (!DYNAMIC_POIS.has(correctedPOI)) {
+                const { isPlayerNearPOI } = require("./services/distanceCheck");
+                const checkResult = await isPlayerNearPOI(playerName, correctedPOI);
+                if (!checkResult.success) {
+                    await sendServerMessage(checkResult.message);
+                    return res.sendStatus(204);
+                }
+            } else {
+                console.log(`🛑 Distance check bypassed for dynamic POI: ${correctedPOI}`);
             }
 
             // ✅ Claim the POI
             CLAIMS[correctedPOI] = { player: playerName, timestamp: Date.now() };
-            
+
             // ✅ Only send ONE response confirming claim
             await sendServerMessage(`${playerName} successfully claimed ${correctedPOI}.`);
             
