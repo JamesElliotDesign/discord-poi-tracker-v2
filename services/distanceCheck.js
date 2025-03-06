@@ -118,21 +118,28 @@ function calculateDistance(pos1, pos2) {
 /**
  * Validate if Player is within 500m of POI
  */
-async function isPlayerNearPOI(playerName, poiName) {
-    const playerPos = await getPlayerPosition(playerName);
-    if (!playerPos) return { success: false, message: `Unable to retrieve position for ${playerName}.` };
+    async function isPlayerNearPOI(playerName, poiName) {
+        console.log(`🚀 Checking distance for ${playerName} at ${poiName}`);
 
-    const poiPos = POI_POSITIONS[poiName];
-    if (!poiPos) return { success: false, message: `Unknown POI: ${poiName}.` };
+        const playerPos = await getPlayerPosition(playerName);
+        if (!playerPos) {
+            return { success: false, message: `Unable to retrieve position for ${playerName}.` };
+        }
 
-    const distance = calculateDistance(playerPos, poiPos);
-    console.log(`📍 ${playerName} Distance to ${poiName}: ${distance.toFixed(2)}m`);
+        const poiPos = POI_POSITIONS[poiName];
+        if (!poiPos) {
+            return { success: false, message: `Unknown POI: ${poiName}.` };
+        }
 
-    if (distance <= 500) {
-        return { success: true, message: `${playerName} is within range of ${poiName}.` };
-    } else {
-        return { success: false, message: `${playerName} is too far from ${poiName} (${distance.toFixed(2)}m). Move closer to claim.` };
+        const distance = calculateDistance(playerPos, poiPos);
+        console.log(`📍 ${playerName} Distance to ${poiName}: ${distance.toFixed(2)}m`);
+
+        if (distance > 500) {
+            return { success: false, message: `${playerName} is too far from ${poiName} (${distance.toFixed(2)}m). Move closer to claim.` };
+        }
+
+        // ✅ Only return success without sending multiple messages
+        return { success: true };
     }
-}
 
 module.exports = { isPlayerNearPOI };

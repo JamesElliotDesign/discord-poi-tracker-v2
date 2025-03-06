@@ -179,15 +179,16 @@ app.post("/webhook", async (req, res) => {
                 return res.sendStatus(204);
             }
 
-            // 🔹 Check if already claimed and show time since claim
+            // 🔹 If already claimed, prevent multiple responses
             if (CLAIMS[correctedPOI]) {
-                let timeSinceClaim = Math.floor((Date.now() - CLAIMS[correctedPOI].timestamp) / 60000); // Convert ms → minutes
+                let timeSinceClaim = Math.floor((Date.now() - CLAIMS[correctedPOI].timestamp) / 60000);
                 await sendServerMessage(`${correctedPOI} was already claimed by ${CLAIMS[correctedPOI].player} ${timeSinceClaim} minutes ago.`);
                 return res.sendStatus(204);
             }
 
             const { isPlayerNearPOI } = require("./services/distanceCheck");
 
+            // ✅ Only send distance check response once
             const checkResult = await isPlayerNearPOI(playerName, correctedPOI);
             if (!checkResult.success) {
                 await sendServerMessage(checkResult.message);
@@ -196,8 +197,11 @@ app.post("/webhook", async (req, res) => {
 
             // ✅ Claim the POI
             CLAIMS[correctedPOI] = { player: playerName, timestamp: Date.now() };
-            await sendServerMessage(`${playerName} claimed ${correctedPOI}.`);
-
+            
+            // ✅ Only send ONE response confirming claim
+            await sendServerMessage(`${playerName} successfully claimed ${correctedPOI}.`);
+            
+            return res.sendStatus(204);
         }
 
        // 🟢 "Unclaim POI"
