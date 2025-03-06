@@ -64,11 +64,8 @@ async function getPlayerPosition(playerName) {
             },
         });
 
-        console.log("🔍 Raw API Response:", JSON.stringify(response.data, null, 2));
-
         // ✅ FIX: Use "sessions" array instead of "players"
         const players = response.data.sessions || [];
-        console.log("🔍 Players Retrieved from API:", players.map(p => p.gamedata.player_name)); 
 
         const player = players.find(p => {
             if (!p.gamedata || !p.gamedata.player_name) return false;
@@ -76,8 +73,6 @@ async function getPlayerPosition(playerName) {
             // Trim & normalize for accurate comparison
             const apiName = p.gamedata.player_name.trim().toLowerCase();
             const inputName = playerName.trim().toLowerCase();
-
-            console.log(`🔍 Checking Player: '${apiName}' vs '${inputName}'`);
 
             return apiName === inputName;
         });
